@@ -32,8 +32,12 @@ One copy of PEBBL per Windows computer, for every user, with an icon on everyone
 "Run as administrator"** and paste:
 
 ```
-curl -fLO https://raw.githubusercontent.com/tufts-ebbl/pebbl/main/setup_lab_computer.sh && bash setup_lab_computer.sh
+git clone https://github.com/tufts-ebbl/pebbl.git /c/Users/Public/Downloads/pebbl && bash /c/Users/Public/Downloads/pebbl/setup_lab_computer.sh
 ```
+
+To run it again later (it's safe; it skips what's done and updates the rest): `bash /c/Users/Public/Downloads/pebbl/setup_lab_computer.sh`. It uses git rather than
+curl because some networks block GitHub's separate file address (`raw.githubusercontent.com`) while allowing
+github.com.
 
 It installs Python 3.11 for all users if needed (after checking the installer's signature; if Python 3.11 is
 installed just for your own account, which blocks that, it explains and asks before uninstalling that copy, and it

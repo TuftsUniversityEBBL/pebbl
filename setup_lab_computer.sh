@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Set up PEBBL on a Windows lab computer, for every user (HLU, 2026-10-06).
 #
-# Lab staff: open Git Bash with "Run as administrator", then paste:
+# Lab staff: open Git Bash with "Run as administrator", then paste (add the options below as needed):
 #
-#   curl -fLO https://raw.githubusercontent.com/tufts-ebbl/pebbl/main/setup_lab_computer.sh && bash setup_lab_computer.sh
+#   git clone https://github.com/tufts-ebbl/pebbl.git /c/Users/Public/Downloads/pebbl && bash /c/Users/Public/Downloads/pebbl/setup_lab_computer.sh
 #
-# It's safe to run again: it skips whatever is already done and updates the rest.
+# It uses git (github.com) rather than curl: a lab computer that reached github.com couldn't reach
+# raw.githubusercontent.com, GitHub's separate file address (HLU, 2026-10-10). To run it again later
+# (it's safe: it skips whatever is already done and updates the rest):
+#
+#   bash /c/Users/Public/Downloads/pebbl/setup_lab_computer.sh
 # Options:
 #   --python-installer '\\server\share\python-3.11.4-amd64.exe'
 #       Install Python from this copy instead of downloading 3.11.9 from
@@ -74,10 +78,33 @@ $s = Get-AuthenticodeSignature -LiteralPath $Path
 "$($s.Status)|$($s.SignerCertificate.Subject)"
 PS
 cat > "$WORK/install_python.ps1" <<'PS'
+# Prints the installer's exit code (rather than exiting with it: bash keeps only its last 8 bits, so 1618
+# showed as 82 and 1603 as 67 on HLU's lab computer, 2026-10-11).
 param([string]$Exe, [string]$Log)
 $p = Start-Process -FilePath $Exe -Wait -PassThru -ArgumentList '/quiet', 'InstallAllUsers=1', 'PrependPath=1',
     'Include_launcher=1', 'InstallLauncherAllUsers=1', 'Include_test=0', ('/log "' + $Log + '"')
-exit $p.ExitCode
+Write-Output $p.ExitCode
+PS
+cat > "$WORK/wait_for_installer.ps1" <<'PS'
+# Waits while another installation holds Windows Installer (its Global\_MSIExecute mutex), up to $Seconds.
+# Prints "free", or "busy" if it's still running then.
+param([int]$Seconds = 600)
+function Test-Busy {
+    # The mutex exists only during an installation. Being refused access to it also means it exists.
+    try {
+        $m = $null
+        if ([System.Threading.Mutex]::TryOpenExisting('Global\_MSIExecute', [ref]$m)) { $m.Dispose(); return $true }
+        return $false
+    } catch [System.UnauthorizedAccessException] { return $true }
+}
+$deadline = (Get-Date).AddSeconds($Seconds)
+$said = $false
+while (Test-Busy) {
+    if ((Get-Date) -gt $deadline) { Write-Output 'busy'; exit 0 }
+    if (-not $said) { [Console]::Error.WriteLine('   Another installation is running; waiting for it to finish...'); $said = $true }
+    Start-Sleep -Seconds 5
+}
+Write-Output 'free'
 PS
 cat > "$WORK/per_user_python.ps1" <<'PS'
 param([string]$Version)
@@ -188,14 +215,22 @@ else
   note "Installing for all users (a few minutes; no windows appear)..."
   py_log="/tmp/pebbl_python_install.log"
   if [ "$DRY_RUN" = 0 ]; then
-    run_ps install_python.ps1 "$(winpath "$installer")" "$(winpath "$py_log")"
-    code=$?
+    # Windows Installer runs one installation at a time; the uninstall above, or Windows Update, may still
+    # be finishing (HLU's lab computer, 2026-10-11: error 1618 right after the uninstall).
+    code=1618
+    for attempt in 1 2; do
+      [ "$(run_ps wait_for_installer.ps1 600 | tr -d '\r' | tail -n 1)" = free ] \
+        || fail "Another installation has been running for 10 minutes (often Windows Update). Restart the computer, then run this script again."
+      code="$(run_ps install_python.ps1 "$(winpath "$installer")" "$(winpath "$py_log")" | tr -d '\r' | tail -n 1)"
+      [ "$code" = 1618 ] || break
+      note "Another installation started at the same time; waiting and trying once more..."
+    done
     if [ "$code" != 0 ] && [ "$code" != 3010 ]; then
       case "$code" in
-        67) meaning="a network location it needed couldn't be found" ;;
         1602) meaning="the installation was canceled" ;;
-        1603) meaning="a fatal error during installation" ;;
-        1618) meaning="another installation is already running (often Windows Update); wait for it, then run this again" ;;
+        1603) meaning="a fatal error during installation; often because Python ${PYTHON_VERSION%.*} is still installed for one account on this computer" ;;
+        1618) meaning="another installation was running (often Windows Update); restart the computer, then run this again" ;;
+        1638) meaning="another copy of this Python version is already installed; uninstall it first" ;;
         *) meaning="see its log" ;;
       esac
       printf '\n   The installer'"'"'s log is %s. Its last lines:\n' "$(winpath "$py_log")"

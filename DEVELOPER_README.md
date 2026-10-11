@@ -99,13 +99,18 @@ run again, and it:
    checks the installer's Authenticode signature is the Python Software
    Foundation's. If Python 3.11 is installed just for the account running the
    script (`HKCU\Software\Python\PythonCore\3.11`), the all-users installer
-   fails: HLU's lab computer gave code 67 and a log ending 0x643. So the
+   fails: HLU's lab computer got 1603 (shown as 67, see below), with a log ending 0x643. So the
    script explains this and asks `[y/N]`. On yes, it runs that bundle's own
    `QuietUninstallString` (only HKCU "Python 3.11.x" entries with a
    BundleVersion) and checks it's gone. Other versions, other accounts and
    Anaconda are never touched. If an install still fails, it prints the
    meaning of the code and the end of its `/log`
-   (`%TEMP%\pebbl_python_install.log`).
+   (`%TEMP%\pebbl_python_install.log`). The installer's exit code is printed
+   by the PowerShell helper rather than passed as an exit status, because bash
+   keeps only 8 bits (1603 showed as 67 and 1618 as 82). Before installing, the
+   script waits up to 10 minutes while another installation holds Windows
+   Installer (the `Global\_MSIExecute` mutex), and it retries once on 1618
+   (2026-10-11: 1618 right after the per-user uninstall).
 2. sets `git config --system safe.directory`;
 3. clones or pulls the repo;
 4. runs `icacls ... //grant *S-1-5-32-545:(OI)(CI)M`;
