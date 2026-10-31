@@ -80,10 +80,10 @@ Built by `physio_io.find_run_path` from the data folder, subject and run:
 
 - The subject is zero-padded to three digits (`1` becomes `001`); runs are
   `1` and `2`.
-- If the `task-sdi` file isn't there, PEBBL uses the one
-  `sub-<SSS>_ses-run<R>_task-*_physio.tsv.gz` in that folder; with more than
-  one it stops and lists them. (The `task-sdi` preference is the original
-  study's; making it configurable is planned.)
+- The task label (`sdi` above) is the study profile's `task` (section 10;
+  `sdi` with the built-in settings). If that file isn't there, PEBBL uses the
+  one `sub-<SSS>_ses-run<R>_task-*_physio.tsv.gz` in that folder; with more
+  than one it stops and lists them.
 - **Outputs** go next to the recording (or to `--out-dir`), named from its
   stem, the file name minus `_physio.tsv.gz`: for example
   `sub-001_ses-run1_task-sdi_annotations_abc.json`.
@@ -134,6 +134,7 @@ ASCII (non-ASCII characters are escaped, e.g. `µS`).
 | `source_file` | the recording's stem (`physio_review.py`), or its full path (`physio_annotate.py`) |
 | `sampling_rate` | the sidecar's `SamplingFrequency` |
 | `channels` | one entry per channel, below |
+| `study_profile` | only when a study profile file was used (section 10): `{name, sha256}`, the profile's name and the SHA-256 of its file |
 
 **Per channel**
 
@@ -193,7 +194,7 @@ section 5, with these differences:
 
 - Top level adds `reconciled_by` (the reconciler), `reconciled_from`
   (`[A, B]`, the reviewers' initials) and `agreement` (below); `initials` is
-  the reconciler.
+  the reconciler. `study_profile` is recorded as in section 5.
 - Each channel adds `reconciled_by`, `reconciled_from` and, when any list is
   non-empty, `reviewer_origin`: `{"agreed": [...], "only_<A>": [...],
   "only_<B>": [...]}`, the marks as they stood before reconciling. A final
@@ -270,6 +271,31 @@ Written by `processing_log.append_processing_log_entry` in the data folder
   one row per checked run.
 - **Install marker:** `annotate_env/requirements.installed.txt`, the
   requirements last installed by `pebbl_launcher.py`.
+
+## 10. Study profiles, `pebbl_study.toml`
+
+Read by `study_profile.load`. PEBBL's built-in settings are those of the
+study it was first built for (task `sdi`); with no profile file, nothing
+about a session changes. Another study's settings are a small TOML file that
+lab staff put in that study's data folder, next to `processing_log.csv`
+(or name with `physio_review.py --study-profile <file>`):
+
+```toml
+schema_version = 1
+name = "My study"   # shown at the start of a session; recorded in saved files
+task = "mystudy"    # the recordings' task label (letters and digits)
+```
+
+- PEBBL refuses a profile with an unknown setting, a wrong value, or text it
+  can't read, with a plain message: a misspelled setting is never silently
+  ignored.
+- With a profile file, a recording whose task label isn't the profile's
+  `task` stops the session before anything is saved. With the built-in
+  settings, a task label other than `sdi` only prints a note.
+- With a profile file, the session log's header names it, and saved review
+  files record it (`study_profile`, sections 5 and 6).
+- Profiles hold settings only, never data. They are kept with each study's
+  own records, not in this repository.
 
 ## What PEBBL does not check
 

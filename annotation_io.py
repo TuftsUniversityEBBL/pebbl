@@ -22,6 +22,7 @@ import numpy as np
 
 import session_log
 import session_summary_gui
+import study_profile
 from ppg_checks import ppg_check_lines, same_beat_lines
 from provenance import channel_provenance, new_pipeline_ppg, provenance_mismatch
 from channel_config import (COMPANION_CHANNELS, GUIDE_CHANNELS, GUIDE_CONTEXT_TEXT, GUIDE_COUNTER_LOSS_TEXT,
@@ -1262,6 +1263,7 @@ def save_annotation_json(output_dir, file_stem, initials, channel_outputs, sfreq
         "source_file": source_file,
         "sampling_rate": sfreq,
         "channels": merged_channels,
+        **study_profile.active().saved_record(),  # only when a profile file is in use (study_profile.py)
     }
 
     with open(out_path, "w") as f:

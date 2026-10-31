@@ -157,6 +157,16 @@ such check prints `SKIPPED: ...`, its suite still passes, and
 `run_tests.py --require-data` on a computer that has the test data: it also
 fails if any check was skipped.
 
+## Studies
+
+PEBBL's built-in settings are those of the study it was first built for
+(recordings named `..._task-sdi_physio.tsv.gz`). Another study's settings
+are a study profile, `pebbl_study.toml`, which lab staff put in that study's
+data folder (or name with `--study-profile`); `study_profile.py` reads and
+checks it, and `docs/FORMATS.md` section 10 lists what it can set. Profiles
+are kept with each study's records, not in this repository. With no profile
+file nothing about a session changes.
+
 ## Design history
 
 Comments and test messages often cite `HANDOFF.md` (with § numbers) or dated
@@ -1644,6 +1654,12 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   tests").
 - `testdata.py` — where the tests find real test data (`PEBBL_TEST_INPUT`
   or `test_input/`), and the `SKIPPED:` line a check prints without it.
+- `study_profile.py` — per-study settings: the built-in ones, or a study's
+  `pebbl_study.toml` (see "Studies").
+- `test_study_profile.py` — tests it: the built-in settings change nothing,
+  profiles are read and refused as they should be, a recording of another
+  task stops the session, and saved files record the profile only when one
+  is used.
 - `pebbl_launcher.py` — what the start scripts run: updates PEBBL, reinstalls
   the requirements when they change, and opens the form again after each
   session (see "Setup").

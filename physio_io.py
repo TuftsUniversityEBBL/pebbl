@@ -31,6 +31,8 @@ import neurokit2 as nk
 import numpy as np
 import pandas as pd
 
+import study_profile
+
 # Column order/names exactly as written by physioBatch.py's save_tsv_gz() call
 REAL_PHYSIO_COLUMNS = [
     "ecg", "rsp", "ppg", "eda",
@@ -52,18 +54,23 @@ def resolve_box_path_and_subject(box_path, subject):
 
 
 def build_run_path(box_path, subject, run):
-    """Pure path construction (no prompting, no existence check)."""
+    """
+    Pure path construction (no prompting, no existence check), with the task
+    label of the study's settings (study_profile.py; "sdi" unless a profile
+    says otherwise).
+    """
     run = str(run).replace("run", "").replace("ses-", "")
     sub_dir = f"sub-{subject}"
-    file_stem = f"sub-{subject}_ses-run{run}_task-sdi"
+    file_stem = f"sub-{subject}_ses-run{run}_task-{study_profile.active().task}"
     return os.path.join(box_path, sub_dir, f"ses-run{run}", "beh", f"{file_stem}_physio.tsv.gz")
 
 
 def find_run_path(box_path, subject, run):
     """
     The run's recording under box_path, whatever its task label (HLU,
-    2026-10-05: other studies aren't task-sdi). Our study's task-sdi path is
-    used whenever it exists, so nothing changes for it. Otherwise this looks
+    2026-10-05: other studies aren't task-sdi). The path with the study's own
+    task label (build_run_path) is used whenever it exists, so nothing changes
+    for task-sdi with the built-in settings. Otherwise this looks
     in the same sub-XXX/ses-runY/beh/ folder for
     sub-XXX_ses-runY_task-<anything>_physio.tsv.gz:
       - one match: that file;
