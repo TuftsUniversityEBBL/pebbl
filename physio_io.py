@@ -106,7 +106,7 @@ def resolve_real_input_path(input_path, box_path, subject, run):
 
     box_path, subject = resolve_box_path_and_subject(box_path, subject)
     if not run:
-        run = input("Run (1 or 2): ").strip()
+        run = input(f"Run ({' or '.join(study_profile.active().runs)}): ").strip()
     run = run.replace("run", "").replace("ses-", "")
 
     resolved_path = find_run_path(box_path, subject, run)
@@ -137,14 +137,14 @@ def resolve_subject_run_paths(input_run1, input_run2, box_path, subject):
     else:
         box_path, subject = resolve_box_path_and_subject(box_path, subject)
         paths = {}
-        for run in ("1", "2"):
+        for run in study_profile.active().runs:  # the study's runs: "1" and "2" built in
             candidate = find_run_path(box_path, subject, run)
             paths[run] = candidate if os.path.exists(candidate) else None
 
     found = {run: p for run, p in paths.items() if p}
     if not found:
         raise SystemExit(
-            f"No run 1 or run 2 physio.tsv.gz found for this subject. Checked: {paths}\n"
+            f"No {' or '.join('run ' + r for r in paths)} physio.tsv.gz found for this subject. Checked: {paths}\n"
             f"Double-check the Box path and subject."
         )
     print(f"Found run(s): {list(found.keys())} -> {found}")

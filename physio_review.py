@@ -159,6 +159,9 @@ def parse_args(argv=None):
                          help="Also show the PPG guide row under the ECG (Steps 1-3; off by default since 2026-10-03, HLU): each run's pulse sits a different delay after its R peaks, so use it for counting beats only, never to place an R peak.")
     parser.add_argument("--allow-old-ppg", action="store_true",
                          help="Lab staff only: allow PPG review on a file processed before the PPG timing fix.")
+    parser.add_argument("--ecg-inverted", action="store_true",
+                         help="The ECG was recorded upside down: review it flipped, so its R peaks point up (only "
+                              "in a study whose profile offers it). Saved files record it.")
     parser.add_argument("--study-profile", type=str, default=None,
                          help="Lab staff only: the study profile (TOML) to use instead of the data folder's "
                               f"{study_profile.PROFILE_FILE}, if any (see study_profile.py).")
@@ -272,6 +275,8 @@ def parse_args_or_show_gui():
             argv += ["--initials", values["initials"], "--template-start", str(values["template_start"]),
                      "--template-run", values["template_run"], "--template-window", str(values["template_window"])]
         argv += _guide_flags(values)
+    if values.get("ecg_inverted"):
+        argv += ["--ecg-inverted"]
 
     _print_equivalent_command(argv)
     return parse_args(argv)
@@ -306,6 +311,7 @@ def load_run_data(args):
             run_file_stems[run] = f"synthetic_demo_run{run}"
             run_out_dirs[run] = demo_out_dir
             run_sources[run] = None
+        _flip_ecg_if_asked(run_dfs)
         return run_dfs, run_file_stems, run_out_dirs, sfreq, run_sources
 
     run_paths = resolve_subject_run_paths(args.input_run1, args.input_run2, args.box_path, args.subject)
@@ -322,7 +328,23 @@ def load_run_data(args):
         run_file_stems[run] = os.path.basename(path).replace("_physio.tsv.gz", "")
         run_out_dirs[run] = args.out_dir or os.path.dirname(os.path.abspath(path))
         run_sources[run] = {"sidecar": read_sidecar(sidecar_path_for(path)), "tsv_path": path}
+    _flip_ecg_if_asked(run_dfs)
     return run_dfs, run_file_stems, run_out_dirs, sfreq, run_sources
+
+
+def _flip_ecg_if_asked(run_dfs):
+    """
+    With --ecg-inverted (a recording made upside down), negates each run's ECG
+    in memory, so every step works on an upright trace and R peaks are
+    maxima. The file itself, and so its content hash, is untouched; saved
+    peaks are file samples, valid either way.
+    """
+    if not study_profile.ecg_flipped():
+        return
+    for df in run_dfs.values():
+        if "ecg" in df.columns:
+            df["ecg"] = -df["ecg"]
+    print("The ECG is shown flipped (it was recorded upside down), so its R peaks point up. Mark them as usual.")
 
 
 def _check_modes_match(outputs_a, outputs_b, active_channels, label_a, label_b):
@@ -925,6 +947,11 @@ def _main(session_log):
         study_profile.activate(profile)
         if not profile.built_in:
             print(f"Study profile: {profile.name} ({profile.path})")
+        if args.practice and not profile.practice:
+            raise SystemExit(f"This study ({profile.name}) has no certification practice. Please ask the lab staff.")
+        if getattr(args, "ecg_inverted", False) and not profile.ecg_inversion_option:
+            raise SystemExit("This study doesn't use 'Flip the ECG' (--ecg-inverted). Please ask the lab staff.")
+        study_profile.set_ecg_flipped(getattr(args, "ecg_inverted", False))
         use_local_copy = (
             not args.synthetic
             and not (args.input_run1 or args.input_run2)

@@ -69,6 +69,8 @@ either way, so this doesn't apply to them.
 
 import mne
 
+import study_profile
+
 CHANNELS = {
     "ecg": {
         # MNE's native "ecg" type assumes raw data in VOLTS (unit_scalings
@@ -235,14 +237,35 @@ def select_channels(requested=None):
     by physio_review.py (Steps 2 and 3), physio_annotate.py and
     annotation_io.run_stage_b(), so no entry point can skip the rule.
     """
+    offered = study_profile.active().channels  # a study profile's channel list; None: every channel
     if requested is None:
-        return {k: v for k, v in CHANNELS.items() if not v.get("review_alone")}
+        return {k: v for k, v in CHANNELS.items() if not v.get("review_alone") and (offered is None or k in offered)}
     requested = [c.strip() for c in requested if c.strip()]
     unknown = [c for c in requested if c not in CHANNELS]
     if unknown:
         raise SystemExit(f"Unknown channel(s) {unknown}. Options: {list(CHANNELS.keys())}")
+    not_offered = [c for c in requested if offered is not None and c not in offered]
+    if not_offered:
+        raise SystemExit(f"This study ({study_profile.active().name}) doesn't review "
+                         f"{', '.join(CHANNELS[c]['label'] for c in not_offered)}. Options: {offered}")
     check_review_alone(requested)
     return {k: v for k, v in CHANNELS.items() if k in requested}
+
+
+def machine_qc_source(ch_key, cfg):
+    """
+    The MachineQC.Channels entry a fresh segment channel starts from: its
+    own, its parent's (bad_ppg from ppg), or, when the study profile sets
+    bad_ecg_from_machine_qc, ECG's stretches for bad_ecg.
+    """
+    if ch_key == "bad_ecg" and study_profile.active().bad_ecg_from_machine_qc:
+        return "ecg"
+    return cfg.get("machine_qc_source", ch_key)
+
+
+def uses_machine_qc(ch_key, cfg):
+    """Whether a channel is meant to start from a machine check (see machine_qc_source)."""
+    return bool(cfg.get("machine_qc")) or (ch_key == "bad_ecg" and study_profile.active().bad_ecg_from_machine_qc)
 
 
 def empty_channels(df, keys):

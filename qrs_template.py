@@ -25,12 +25,28 @@ import pandas as pd
 import pywt
 from scipy import signal
 
+import study_profile
 from annotation_io import DEFAULT_SNAP_WINDOW_SEC, DRAWN_PEAK_CLIMB_SEC, point_sample_from_annotation
 from channel_config import GUIDE_OPT_IN, GUIDE_TEXT
 from provenance import new_pipeline_ppg
 from template_preview_gui import show_template_preview
 
 POINT_LABEL = "peak_ecg"
+
+
+def seed_snap_samples(sfreq):
+    """
+    How far (in samples) a template-found R peak, or an untouched seed in the
+    template window, may move to the highest raw-ECG sample:
+    DEFAULT_SNAP_WINDOW_SEC (50 ms) with the built-in settings, else the study
+    profile's ecg_seed_snap_ms. 0 leaves each where the template alignment put
+    it, for an rS complex whose small r (the mark, HLU 2026-10-31) has a
+    taller wave within 50 ms.
+    """
+    snap_ms = study_profile.active().ecg_seed_snap_ms
+    if snap_ms == study_profile.BUILT_IN_SEED_SNAP_MS:
+        return round(DEFAULT_SNAP_WINDOW_SEC * sfreq)
+    return round(snap_ms / 1000 * sfreq)
 
 
 QRS_BAND_UPPER_HZ = 31.25
@@ -236,7 +252,7 @@ def extract_and_refine_peaks(raw_ecg_full, wavelet_filtered_full, qrs_template, 
     only to override that.
     """
     if snap_window_samples is None:
-        snap_window_samples = round(DEFAULT_SNAP_WINDOW_SEC * sampling_rate)
+        snap_window_samples = seed_snap_samples(sampling_rate)
     derived_distance_ms, derived_refractory_ms = spacing_from_reference_rr(reference_rr_ms)
     if refractory_min_rr_ms is None:
         refractory_min_rr_ms = derived_refractory_ms
@@ -311,6 +327,8 @@ def save_qrs_template_outputs(output_dir, file_stem, initials, final_peaks, qrs_
         # Whether the PPG guide row was on screen while the template window
         # was corrected (ppg-plan §4c, reverse circularity).
         payload["ecg"]["ppg_guide_shown"] = bool(ppg_guide_shown)
+    if study_profile.ecg_flipped():
+        payload["ecg"]["inverted"] = True  # built on the flipped ECG (--ecg-inverted)
     with open(json_path, "w") as f:
         json.dump(payload, f)
 
@@ -467,7 +485,7 @@ def run_stage_a(run_dfs, run_file_stems, run_out_dirs, sfreq, initials,
                           "Start again and correct at least a couple of peaks, or choose a different "
                           "template window start.")
 
-    seeded_snapped = (snap_to_local_max(ecg_window, seeded_window, window_samples=round(DEFAULT_SNAP_WINDOW_SEC * sfreq))
+    seeded_snapped = (snap_to_local_max(ecg_window, seeded_window, window_samples=seed_snap_samples(sfreq))
                       if seeded_window else [])
     window_peaks = np.array(sorted({int(p) for p in drawn_window} | {int(p) for p in seeded_snapped}))
     # Median R-R of the RA-corrected window sets the detection refractory

@@ -11,6 +11,20 @@ processing_log.csv, named pebbl_study.toml:
     name = "mystudy"   # shown at the start of a session and recorded in saved files
     task = "mystudy"   # the recordings' task label: sub-XXX_ses-runY_task-<task>_physio.tsv.gz
 
+and, each optional, defaulting to the built-in behaviour:
+
+    runs = ["1"]                        # the runs there are (built in: "1" and "2")
+    channels = ["ecg", "ppg", "rsp", "eda", "emg_cor"]   # the channels offered (built in: all)
+    practice = false                    # certification practice offered (built in: yes)
+    ppg_requires_timing_marker = false  # PPG review needs Provenance.CTTiming (built in: yes)
+    bad_ecg_from_machine_qc = true      # bad_ecg starts from MachineQC's ecg stretches (built in: no)
+    ecg_inversion_option = true         # offer "flip the ECG" for upside-down recordings (built in: no)
+    ecg_seed_snap_ms = 0                # Step 1 moves each template-found R peak to the highest
+                                        # point within this many ms (built in: 50; 0 = don't move)
+    [event_labels]                      # names shown beside event codes (built in: numbers only)
+    0 = "off task"
+    50 = "baseline"
+
 Lab staff can also name a profile file directly (physio_review.py
 --study-profile). Profiles hold settings only, never data, and they are kept
 outside this repository with each study's own records.
@@ -39,17 +53,30 @@ PROFILE_FILE = "pebbl_study.toml"
 SCHEMA_VERSION = 1
 BUILT_IN_TASK = "sdi"
 TASK_PATTERN = re.compile(r"^[A-Za-z0-9]+$")  # a BIDS label: letters and digits only
-SETTINGS = {"schema_version", "name", "task"}
+SETTINGS = {"schema_version", "name", "task", "runs", "channels", "practice", "ppg_requires_timing_marker",
+            "bad_ecg_from_machine_qc", "ecg_inversion_option", "event_labels", "ecg_seed_snap_ms"}
+BUILT_IN_SEED_SNAP_MS = 50  # annotation_io.DEFAULT_SNAP_WINDOW_SEC, in ms
+FLAGS = {"practice": True, "ppg_requires_timing_marker": True, "bad_ecg_from_machine_qc": False,
+         "ecg_inversion_option": False}  # each flag's built-in value
 
 
 class StudyProfile:
     """One study's settings: the built-in ones (path None) or a profile file's."""
 
-    def __init__(self, name, task, path=None, sha256=None):
+    def __init__(self, name, task, path=None, sha256=None, runs=("1", "2"), channels=None, event_labels=None,
+                 ecg_seed_snap_ms=BUILT_IN_SEED_SNAP_MS, **flags):
         self.name = name
         self.task = task
         self.path = path
         self.sha256 = sha256
+        self.runs = list(runs)
+        self.ecg_seed_snap_ms = ecg_seed_snap_ms
+        self.channels = None if channels is None else list(channels)  # None: every channel PEBBL knows
+        self.event_labels = dict(event_labels or {})  # {code: name}
+        for flag, default in FLAGS.items():
+            setattr(self, flag, flags.pop(flag, default))
+        if flags:
+            raise TypeError(f"unknown settings {sorted(flags)}")
 
     @property
     def built_in(self):
@@ -66,6 +93,19 @@ class StudyProfile:
 
 BUILT_IN = StudyProfile(name="", task=BUILT_IN_TASK)
 _active = BUILT_IN
+# This session's "flip the ECG" choice (physio_review.py --ecg-inverted, only
+# with a profile that sets ecg_inversion_option): the ECG was recorded upside
+# down, so every step reviews it negated and saved files record "inverted".
+_ecg_flipped = False
+
+
+def set_ecg_flipped(flipped):
+    global _ecg_flipped
+    _ecg_flipped = bool(flipped)
+
+
+def ecg_flipped():
+    return _ecg_flipped
 
 
 def _refuse(path, reason):
@@ -90,8 +130,41 @@ def read_profile(path):
         _refuse(path, "name must be some text")
     if not isinstance(task, str) or not TASK_PATTERN.match(task):
         _refuse(path, "task must be the recordings' task label (letters and digits only)")
+    optional = {}
+    if "runs" in settings:
+        runs = settings["runs"]
+        if (not isinstance(runs, list) or not runs or len(set(map(str, runs))) != len(runs)
+                or not all(isinstance(r, str) and r.isdigit() for r in runs)):
+            _refuse(path, 'runs must be a list of run numbers as text, e.g. ["1"]')
+        optional["runs"] = runs
+    if "channels" in settings:
+        from channel_config import CHANNELS  # here, not at the top: channel_config needn't load for paths alone
+        channels = settings["channels"]
+        if not isinstance(channels, list) or not channels or not all(isinstance(c, str) for c in channels):
+            _refuse(path, "channels must be a list of channel names")
+        unknown_channels = [c for c in channels if c not in CHANNELS]
+        if unknown_channels:
+            _refuse(path, f"channels has name(s) PEBBL doesn't know: {', '.join(unknown_channels)} "
+                          f"(it knows {', '.join(CHANNELS)})")
+        optional["channels"] = channels
+    for flag in FLAGS:
+        if flag in settings:
+            if not isinstance(settings[flag], bool):
+                _refuse(path, f"{flag} must be true or false")
+            optional[flag] = settings[flag]
+    if "ecg_seed_snap_ms" in settings:
+        snap = settings["ecg_seed_snap_ms"]
+        if isinstance(snap, bool) or not isinstance(snap, int) or not 0 <= snap <= 200:
+            _refuse(path, "ecg_seed_snap_ms must be a whole number of milliseconds from 0 to 200")
+        optional["ecg_seed_snap_ms"] = snap
+    if "event_labels" in settings:
+        labels = settings["event_labels"]
+        if (not isinstance(labels, dict) or not all(k.lstrip("-").isdigit() for k in labels)
+                or not all(isinstance(v, str) and v.strip() for v in labels.values())):
+            _refuse(path, 'event_labels must map event codes to names, e.g. 50 = "baseline"')
+        optional["event_labels"] = {int(k): v.strip() for k, v in labels.items()}
     return StudyProfile(name=name.strip(), task=task, path=os.path.abspath(path),
-                        sha256=hashlib.sha256(raw).hexdigest())
+                        sha256=hashlib.sha256(raw).hexdigest(), **optional)
 
 
 def load(data_folder=None, path=None):

@@ -69,6 +69,7 @@ import sys
 
 import numpy as np
 
+import study_profile
 from physio_io import build_run_path, load_physio_tsv, read_sidecar, sidecar_path_for
 from provenance import column_sha256
 
@@ -373,6 +374,9 @@ def main(argv=None):
     parser.add_argument("--max-lag-sec", type=float, default=2.0,
                         help="How far (seconds) the ECG lag search looks each way (default: 2).")
     parser.add_argument("--report", default=None, help="Optional CSV report path.")
+    parser.add_argument("--study-profile", default=None,
+                        help=f"The study profile (TOML) to use instead of --old-root's {study_profile.PROFILE_FILE}, "
+                             f"if any: it sets the recordings' task label (see study_profile.py).")
     args = parser.parse_args(argv)
 
     # A mistyped folder must not read as "nothing to check" (HLU, 2026-09-27:
@@ -381,6 +385,11 @@ def main(argv=None):
         if not os.path.isdir(path):
             raise SystemExit(f"{flag} folder not found: {path}\nCheck the path (for example the user name in "
                              f"C:\\Users\\<name>\\Box\\...). Nothing was checked.")
+    # The study's task label (task-sdi built in) names the files compared.
+    profile = study_profile.load(args.old_root, args.study_profile)
+    study_profile.activate(profile)
+    if not profile.built_in:
+        print(f"Study profile: {profile.name} ({profile.path})")
 
     work = find_runs_with_ra_work(args.old_root)
     runs = sorted(find_all_runs(args.old_root) & find_all_runs(args.new_root) | set(work)) if args.all \

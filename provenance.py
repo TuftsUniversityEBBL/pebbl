@@ -29,6 +29,8 @@ maintainer's test vectors for sub-001 run 1.
 import gzip
 import hashlib
 
+import study_profile
+
 
 HASH_DEFINITION = "physioprocess-column-sha256-v1"
 """
@@ -86,8 +88,12 @@ def new_pipeline_ppg(sidecar):
     CTTiming being present, not on its type (maintainer's reply, 2026-09-26).
     Whether there is usable PPG to review is a separate test on the data
     (annotation_io.session_checks_before_viewer).
+
+    The rule is the original study's pipeline history: a study profile with
+    ppg_requires_timing_marker = false (study_profile.py) has no such
+    history, so every file counts as new there.
     """
-    if sidecar is None:
+    if sidecar is None or not study_profile.active().ppg_requires_timing_marker:
         return True
     provenance = sidecar.get("Provenance") or {}
     if provenance.get("Practice") is True:
