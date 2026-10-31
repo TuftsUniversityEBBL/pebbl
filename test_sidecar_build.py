@@ -33,6 +33,7 @@ import numpy as np
 
 import physio_review
 import session_summary_gui
+import testdata
 from annotation_io import (
     ONSET_NUDGE_SAMPLES,
     _format_warning_lines,
@@ -48,15 +49,12 @@ from reconcile import build_reconciliation_raw, export_reconciled, save_reconcil
 
 session_summary_gui.show_session_summary = session_summary_gui.headless_decision(finished=True)
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-# The run-7 fixture test_input/sub-001_* was retired on 2026-09-26 (HLU); the
+# sub-001 run 1 from the lab's local test data (see testdata.py). The run-7
+# fixture test_input/sub-001_* was retired on 2026-09-26 (HLU); the
 # run-8 copy in test_input/run8/ is used when it's absent. Its ppg/ppg_peaks
 # hashes equal the published vectors, and the version-dependent assertions
 # check which one they got.
-SUB001 = next((p for p in (os.path.join(HERE, "test_input", "sub-001_ses-run1_task-sdi_physio.tsv.gz"),
-                           os.path.join(HERE, "test_input", "run8", "sub-001_ses-run1_task-sdi_physio.tsv.gz"))
-               if os.path.exists(p)), os.path.join(HERE, "test_input", "sub-001_ses-run1_task-sdi_physio.tsv.gz"))
-SUB085 = os.path.join(HERE, "test_input", "sub-085_ses-run2_task-sdi_physio.tsv.gz")
+SUB001 = testdata.path("sub-001_ses-run1_task-sdi_physio.tsv.gz")
 QUIET = contextlib.redirect_stdout
 
 
@@ -233,7 +231,7 @@ def test_rsp_legacy_and_mode_mismatch():
 def test_machine_qc_prefill():
     print("P2. sub-001: MachineQC pre-fills exactly its SBP spans and 1 RSP span; guards; seed record...")
     if not os.path.exists(SUB001):
-        print("   SKIPPED: test_input/sub-001 not present")
+        testdata.skip("P2. MachineQC pre-fill, guards and seed record on sub-001 run 1")
         return
     df, sfreq = load_physio_tsv(SUB001)
     meta = read_sidecar(SUB001.replace("_physio.tsv.gz", "_physio.json"))
@@ -257,9 +255,10 @@ def test_machine_qc_prefill():
 
     none, mismatch_note = machine_qc_segments(meta, len(df) - 1)
     assert none == {} and "742090" in mismatch_note, mismatch_note
-    old_meta = read_sidecar(SUB085.replace("_physio.tsv.gz", "_physio.json")) if os.path.exists(SUB085) else {}
-    none2, old_note = machine_qc_segments(old_meta, 1000)
-    assert none2 == {} and "no machine quality check" in old_note
+    # No MachineQC: an empty sidecar, and one from before physioProcess wrote MachineQC.
+    for old_meta in ({}, {"SamplingFrequency": 1000, "Columns": list(df.columns)}):
+        none2, old_note = machine_qc_segments(old_meta, 1000)
+        assert none2 == {} and "no machine quality check" in old_note, old_note
 
     tmp = tempfile.mkdtemp()
     try:

@@ -8,7 +8,11 @@ physioProcess/phase_c_20260925/physioprocess_column-hash-reference_20260926.py):
     published test vectors (run 10, 1d74b15: 4ec43a9a88a6...2a893,
     1f0579c29e51...43263, confirmed by the maintainer from both the bids tree
     and this copy on 2026-10-03; runs 8/9 were 835251095b25...9030f,
-    8b89cd443bb8...0f44c);
+    8b89cd443bb8...0f44c). Needs the lab's real test data (testdata.py);
+  - known answers without real data: a synthetic file whose five columns
+    hash to the values physioProcess's own reference script printed for the
+    same bytes (2026-10-31), covering mixed CRLF/LF, empty fields, "1.0" vs
+    "1" vs "0.5120", and negative and scientific-notation values;
   - CRLF and LF line endings give the same hash (negative control for the
     line-terminator rule);
   - changing one written value, even only its formatting ("1.0" -> "1"),
@@ -26,21 +30,38 @@ import os
 import shutil
 import tempfile
 
+import testdata
 from provenance import channel_provenance, column_sha256, provenance_mismatch
 
-HERE = os.path.dirname(os.path.abspath(__file__))
 # The run-7 fixture test_input/sub-001_* was retired on 2026-09-26 (HLU); the
 # copy in test_input/run8/ is used when it's absent. Since 2026-10-03 that
 # copy is run 10's (physioProcess 1d74b15): sub-001 r1 lost CareTaker pulse
 # samples, so its ppg/ppg_peaks changed from run 8/9's vectors (835251095b25...
 # / 8b89cd443bb8...) to the run-10 vectors below, confirmed independently by
 # the physioProcess maintainer (physioprocess-column-sha256-v1).
-SUB001 = next((p for p in (os.path.join(HERE, "test_input", "sub-001_ses-run1_task-sdi_physio.tsv.gz"),
-                           os.path.join(HERE, "test_input", "run8", "sub-001_ses-run1_task-sdi_physio.tsv.gz"))
-               if os.path.exists(p)), os.path.join(HERE, "test_input", "sub-001_ses-run1_task-sdi_physio.tsv.gz"))
+SUB001 = testdata.path("sub-001_ses-run1_task-sdi_physio.tsv.gz")
 SUB001_VECTORS = {
     "ppg": "4ec43a9a88a65503cc0da8f9115ec6788815f480667a9feacfcffef08ff2a893",
     "ppg_peaks": "1f0579c29e5108cd524f171446dc7eca95859f00e7f6c8e11ecb246dfb443263",
+}
+
+# A synthetic physio file (no header; 2 CRLF and 3 LF line endings) and the
+# hashes physioProcess's reference script printed for exactly these bytes:
+# phase_c_20260925/physioprocess_column-hash-reference_20260926.py, SHA-256
+# 682fe58cec4f...dfff8fd8, run unchanged by the physioProcess maintainer on
+# 2026-10-31 and matched by a second implementation it wrote from the definition.
+SYNTHETIC_COLUMNS = ["ecg", "ppg", "ppg_peaks", "sbp", "event"]
+SYNTHETIC_BYTES = (b"0.512\t1.0\t0\t\t20\r\n"
+                   b"-0.031\t1\t1\t118.25\t20\n"
+                   b"1e-05\t-2.5\t0\t\t30\r\n"
+                   b"0.000\t\t0\t119\t30\n"
+                   b"0.5120\t3.25\t1\t119.0\t0\n")
+SYNTHETIC_VECTORS = {
+    "ecg": "fc7cdcaefff733b755fbd8ecb5b9c6af1bd5f18a086532ac95e2db6a9834e425",
+    "ppg": "928e483bcbe130c46a2bcbae0c6433978cc4bfc22f25ccccbe2b35a494d12c70",
+    "ppg_peaks": "c4398c7508e159f3891a00b48f42d0e60a01bba488d5b3273f0818e764c946af",
+    "sbp": "2a797a381e6bd63b9a457abf8863b1f873d3c6ad2561d2a24fad71f69f25f719",
+    "event": "f75b5ad108e68ca6f9092355e06c4730396581e3e274dbc810dfecb7d09cf0d7",
 }
 
 
@@ -65,10 +86,21 @@ def main():
         print(f"   OK: ppg {hashes['ppg'][:12]}...{hashes['ppg'][-5:]}, "
               f"ppg_peaks {hashes['ppg_peaks'][:12]}...{hashes['ppg_peaks'][-5:]}")
     else:
-        print("   SKIPPED: test_input/sub-001 not present")
+        testdata.skip("1. sub-001 run 1's published ppg and ppg_peaks hashes")
 
     tmp = tempfile.mkdtemp()
     try:
+        print("1b. A synthetic file matches physioProcess's reference script's hashes (no real data needed)...")
+        synthetic = os.path.join(tmp, "sub-900_ses-run1_task-synthetic_physio.tsv.gz")
+        write_gz(synthetic, SYNTHETIC_BYTES)
+        assert column_sha256(synthetic, SYNTHETIC_COLUMNS) == SYNTHETIC_VECTORS
+        assert column_sha256(synthetic, SYNTHETIC_COLUMNS, wanted=["sbp"]) == {"sbp": SYNTHETIC_VECTORS["sbp"]}
+        # Negative control: one value written differently ("0.512" -> "0.5120") changes only its column.
+        write_gz(synthetic, SYNTHETIC_BYTES.replace(b"0.512\t1.0", b"0.5120\t1.0", 1))
+        changed = column_sha256(synthetic, SYNTHETIC_COLUMNS)
+        assert [c for c in SYNTHETIC_COLUMNS if changed[c] != SYNTHETIC_VECTORS[c]] == ["ecg"], changed
+        print("   OK: all five columns")
+
         print("2. The definition itself: line endings don't matter; values and formatting do; empty = b''...")
         cols = ["a", "b"]
         lf, crlf = os.path.join(tmp, "lf.tsv.gz"), os.path.join(tmp, "crlf.tsv.gz")

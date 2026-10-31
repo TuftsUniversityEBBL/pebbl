@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Runs the non-interactive pipeline checks against every REAL physio.tsv.gz
-found at test_input/*_physio.tsv.gz. Skips cleanly if none are present
-(this repo doesn't ship real subject data, and test_input/ is local-only).
+in the lab's local test data (see testdata.py). Prints SKIPPED if there are
+none (this repo doesn't ship real subject data).
 
 This exists because real data has already surfaced a bug synthetic data
 never would have (a real PPG channel found to be ~91% NaN, which broke
@@ -23,20 +23,18 @@ stand out as worth investigating rather than being silently swallowed.
 Run with: annotate_env\\Scripts\\python.exe test_real_data.py
 """
 
-import glob
 import os
 
 import numpy as np
 
+import testdata
 from annotation_io import combine_with_reference_channels, export_annotations, seed_annotations
 from channel_config import CHANNELS
 from physio_io import build_raw, compute_scalings, load_physio_tsv
 
 
 def find_test_inputs():
-    # recursive, since a whole-folder Box copy nests files under sub-XXX/ses-runY/beh/
-    return sorted(glob.glob(os.path.join(os.path.dirname(__file__), "test_input", "**", "*_physio.tsv.gz"),
-                             recursive=True))
+    return testdata.all_physio_files()
 
 
 def check_one_file(path):
@@ -126,8 +124,7 @@ def check_one_file(path):
 def main():
     paths = find_test_inputs()
     if not paths:
-        print("No files found under test_input/*_physio.tsv.gz -- skipping (this is expected if you "
-              "haven't placed real test files there).")
+        testdata.skip("every real-data pipeline check (no *_physio.tsv.gz found)")
         return
 
     for path in paths:

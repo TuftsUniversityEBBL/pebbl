@@ -40,6 +40,7 @@ import pandas as pd
 import practice_certification as pc
 import qrs_template
 import session_summary_gui
+import testdata
 from annotation_io import combine_with_reference_channels, export_annotations, run_stage_b
 from channel_config import CHANNELS, GUIDE_CHANNELS, select_channels
 from check_reprocess_alignment import compare_run
@@ -50,17 +51,14 @@ from reconcile import build_reconciliation_raw, export_reconciled, run_stage_c
 
 session_summary_gui.show_session_summary = session_summary_gui.headless_decision(finished=True)
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-# The run-7 fixture test_input/sub-001_* was retired on 2026-09-26 (HLU); the
+# sub-001 run 1 from the lab's local test data (see testdata.py). The run-7
+# fixture test_input/sub-001_* was retired on 2026-09-26 (HLU); the
 # copy in test_input/run8/ is used when it's absent. Since 2026-10-03 that
 # copy is run 10's (physioProcess 1d74b15): sub-001 r1 lost CareTaker pulse
 # samples, so its ppg/ppg_peaks changed from run 8/9's vectors (835251095b25...
 # / 8b89cd443bb8...) to the run-10 vectors below, confirmed independently by
 # the physioProcess maintainer (physioprocess-column-sha256-v1).
-SUB001 = next((p for p in (os.path.join(HERE, "test_input", "sub-001_ses-run1_task-sdi_physio.tsv.gz"),
-                           os.path.join(HERE, "test_input", "run8", "sub-001_ses-run1_task-sdi_physio.tsv.gz"))
-               if os.path.exists(p)), os.path.join(HERE, "test_input", "sub-001_ses-run1_task-sdi_physio.tsv.gz"))
-SUB085 = os.path.join(HERE, "test_input", "sub-085_ses-run2_task-sdi_physio.tsv.gz")
+SUB001 = testdata.path("sub-001_ses-run1_task-sdi_physio.tsv.gz")
 SUB001_PPG_SHA = "4ec43a9a88a65503cc0da8f9115ec6788815f480667a9feacfcffef08ff2a893"
 QUIET = contextlib.redirect_stdout
 
@@ -154,7 +152,7 @@ def test_guide_step1_template_identical():
 def test_units_and_descriptions():
     print("3. Units and descriptions from the sidecar...")
     if not os.path.exists(SUB001):
-        print("   SKIPPED: no sub-001")
+        testdata.skip("3. units and descriptions from sub-001 run 1's sidecar")
         return
     meta = sidecar_of(SUB001)
     units, warnings = sidecar_unit_labels(meta, CHANNELS)
@@ -181,8 +179,13 @@ def test_gate_and_review_alone():
     assert new_pipeline_ppg(None) and new_pipeline_ppg({"Provenance": {"Practice": True}})
     if os.path.exists(SUB001):
         assert new_pipeline_ppg(sidecar_of(SUB001))
-    if os.path.exists(SUB085):
-        assert not new_pipeline_ppg(sidecar_of(SUB085))
+    else:
+        testdata.skip("4b. sub-001 run 1 counts as a new-pipeline file")
+    # Old pipeline: no Provenance.CTTiming (before physioProcess 33004c0). A
+    # "none (...)" string there still means the new pipeline.
+    assert not new_pipeline_ppg({"SamplingFrequency": 1000, "Columns": ["ecg", "ppg"]})
+    assert not new_pipeline_ppg({"Columns": ["ecg", "ppg"], "Provenance": {"PipelineCommit": "715c747"}})
+    assert new_pipeline_ppg({"Provenance": {"CTTiming": "none (no pulse file)"}})
     assert "ppg" not in select_channels(None) and set(select_channels(["ppg"])) == {"ppg"}
     for bad in (["ecg", "ppg"], ["ppg", "eda"]):
         try:
@@ -226,6 +229,8 @@ def test_ppg_checks():
         from ppg_checks import CREST_WINDOW_SEC
         assert markers_off_top(df["ppg"].to_numpy(), seed, round(CREST_WINDOW_SEC * sfreq)) == off
         print(f"   OK: sub-001's machine seed has {len(off)} markers not on a crest of a pulse (same at +/-50 ms)")
+    else:
+        testdata.skip("4b. sub-001 run 1's 11 PPG markers not on a crest")
     # Two crests 30 ms apart (the higher one later): a mark on either crest passes the crest test; the old
     # +/-50 ms rule flagged the lower one. A mark on the upstroke is caught by both.
     t = np.arange(1000) / 1000.0
@@ -289,7 +294,7 @@ def test_ppg_checks():
 def test_provenance_and_history():
     print("4c. Provenance, the changed-signal stop, edit history...")
     if not os.path.exists(SUB001):
-        print("   SKIPPED: no sub-001")
+        testdata.skip("4c. provenance, the changed-signal stop and edit history on sub-001 run 1")
         return
     df, sfreq = load_physio_tsv(SUB001)
     meta = sidecar_of(SUB001)
@@ -498,6 +503,8 @@ def test_checkpoint2_fixes():
             _spans, ppg_note = ppg_invalid_spans(sub001_sidecar, 742091)
             has_mask = "SegmentsByReason" in sub001_sidecar["MachineQC"]["Channels"]["ppg"]
             assert (ppg_note is None) if has_mask else ("no per-sample PPG dropout mask yet" in ppg_note), ppg_note
+        else:
+            testdata.skip("the PPG dropout-mask note on sub-001 run 1's sidecar")
         print("   OK: --no-ppg-guide in qrs_template_stage; relabel keeps scaling 1.0; end-gap note; mask note")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -602,9 +609,6 @@ def test_g2_no_guide_on_old_pipeline():
             qrs_template.run_stage_a({"1": df}, {"1": "t"}, {"1": tmp}, sfreq, "zz", sidecars={"1": old},
                                      ecg_ppg_guide=True)
         assert step1["names"] == ["ecg"], step1
-        if os.path.exists(SUB085):
-            assert not combine_with_reference_channels(ecg_only, load_physio_tsv(SUB085)[0], ppg_guide=True,
-                                                       sidecar=sidecar_of(SUB085), ecg_ppg_guide=True).get("ppg")
         print("   OK: hidden with a note on old-pipeline files; shown on new-pipeline and synthetic data")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -1205,13 +1209,14 @@ def test_guide_rows_2026_09_27():
         shutil.rmtree(tmp, ignore_errors=True)
 
     # Real run-8/9 files: sub-001 r1's dead belt hides the RSP guide; sub-085 r1's live belt shows it.
-    run8 = os.path.join(HERE, "test_input", "run8")
     for name, expected in (("sub-001_ses-run1", ["eda", "event"]), ("sub-085_ses-run1", ["eda", "rsp", "event"])):
-        tsv = os.path.join(run8, f"{name}_task-sdi_physio.tsv.gz")
+        tsv = testdata.path(f"{name}_task-sdi_physio.tsv.gz")
         if os.path.exists(tsv):
             d, _fs = load_physio_tsv(tsv)
             got = list(combine_with_reference_channels({"eda": CHANNELS["eda"]}, d, ppg_guide=True, sidecar=sidecar_of(tsv)))
             assert got == expected, (name, got)
+        else:
+            testdata.skip(f"the RSP guide rows on {name}")
     print("   OK: rows per session; HLU's wording plus the context line; the BP line adds 'pre-marks' only with "
           "ppg_dropout; hidden with a reason (dead belt, old PPG, "
           "empty); never saved; a saved EDA review untouched by an RSP session; guide_shown recorded; Steps 2 and 3; "
@@ -1364,6 +1369,8 @@ def test_sbp_short_no_reading_note():
             k = short_no_reading_gaps(qc["sbp"], len(d), 1000)
             assert k == expected, (k, expected)
             print(f"   (sub-001 r1: {k} short gaps)")
+    else:
+        testdata.skip("SBP short no-reading gaps counted on sub-001 run 1")
     print("   OK: counted inside the run only, under 2 s; line shown with the count; absent otherwise")
 
 

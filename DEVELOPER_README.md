@@ -71,24 +71,33 @@ The scripts set `PEBBL_NO_PAUSE=1` to skip their "press any key" pauses for
 automated tests. `.gitattributes` keeps the `.bat` files CRLF and the Mac
 scripts LF.
 
-By hand, as before. This lives in its own virtual environment, separate from
-`physio_correction_env`, so nothing about the existing RA workflow's
-clean-environment guarantee is touched:
+By hand: PEBBL lives in its own virtual environment, `annotate_env`, inside
+the clone's folder (Python 3.11):
 
 ```
-cd multisignal_annotation
+cd pebbl
 python -m venv annotate_env
 annotate_env\Scripts\activate
 pip install -r requirements.txt
 ```
 
-**The public repository.** RAs get PEBBL from a public `pebbl` GitHub
-repository that holds only the tool. `export_public_pebbl.py` (lab staff)
-copies the RA-facing files into a local clone of it. It is read-only unless
-given `--apply`. It never copies this folder's internal notes, data or
-history. The user manual's source is `docs/PEBBL_User_Manual.html`;
-`docs/build_manual_pdf.py` rebuilds the PDF and the logo PNG with Edge or
-Chrome. The screenshots in `docs/img/` were captured from synthetic data.
+**This repository is PEBBL's only source** (github.com/tufts-ebbl/pebbl,
+since 2026-10-31; before that it was exported from a private development
+folder). Lab computers and RAs' clones `git pull` `main` every time PEBBL
+starts, so anything merged into `main` reaches RAs at their next launch:
+develop on a branch, run the tests (see "Running the tests" below), then
+merge. Participant data, practice answer keys and the lab's design records
+never belong here; `.gitignore` excludes the data file patterns.
+
+**The user manual.** Its source is `docs/PEBBL_User_Manual.html`.
+`docs/build_manual_pdf.py` rebuilds the PDF, the logo PNG and `pebbl.ico`
+with Edge or Chrome, and writes `docs/index.html`: the manual as a
+standalone web page, with a link to the PDF, which GitHub Pages serves from
+`docs/` at https://tufts-ebbl.github.io/pebbl/ (GitHub's own file view
+doesn't preview the PDF; `docs/.nojekyll` makes Pages serve the folder as
+plain files). `--pages-only` writes just `index.html`, and `test_docs.py`
+fails if it is out of date. The screenshots in `docs/img/` are captured
+from synthetic data by `docs/capture_manual_shots.py`.
 
 **Lab computers: `setup_lab_computer.sh`** (HLU, 2026-10-06). One shared
 install per Windows computer, in `C:\Users\Public\Downloads\pebbl`. Run it in
@@ -121,10 +130,41 @@ run again, and it:
 
 `--dry-run` shows the steps; `--check` only checks, with no admin needed. Tested
 in test_pebbl_launcher item 6.
-The export also writes `docs/index.html` (the manual as a standalone page,
-with a link to the PDF) and `docs/.nojekyll`. GitHub Pages serves the public
-repo's `docs` folder at https://tufts-ebbl.github.io/pebbl/, the manual's
-public address (GitHub's own file view doesn't preview this PDF).
+
+## Running the tests
+
+The tests are plain Python scripts, one suite per `test_*.py`. Run them all
+from the clone's folder (Git Bash on Windows):
+
+```
+annotate_env/Scripts/python.exe run_tests.py
+```
+
+It runs each suite in its own process with Qt offscreen (no windows
+appear), prints a table of pass or fail, time and skipped checks, and exits
+1 if any suite fails. Name suites to run only those
+(`run_tests.py test_smoke.py`). One suite on its own:
+`QT_QPA_PLATFORM=offscreen PEBBL_NO_PAUSE=1 annotate_env/Scripts/python.exe -B test_smoke.py`.
+
+**Real test data.** Most checks use synthetic data. Some need real
+physioProcess files (`*_physio.tsv.gz` with their `.json` sidecars), which
+are never part of this repository. Point the tests at a local folder holding
+them with the environment variable `PEBBL_TEST_INPUT`, or put (or link) the
+folder at `test_input/` here, which is gitignored; files are looked for in
+that folder and its `run8/` subfolder (`testdata.py`). Without them, each
+such check prints `SKIPPED: ...`, its suite still passes, and
+`run_tests.py` lists the skips. Before merging into `main`, run
+`run_tests.py --require-data` on a computer that has the test data: it also
+fails if any check was skipped.
+
+## Design history
+
+Comments and test messages often cite `HANDOFF.md` (with § numbers) or dated
+notes such as `multisignal-annotation_audit_20260923-1901.md`. Those are the
+lab's private design records, kept by lab staff rather than in this
+repository: the comment states the decision, and the record holds the
+discussion and evidence behind it. `docs/FORMATS.md` describes the files
+PEBBL reads and writes.
 
 ## The unified script: `physio_review.py`
 
@@ -193,10 +233,6 @@ Run it with **zero flags** and a small window pops up asking:
   - **Keep the local copy after pushing back to Box** -- for
     troubleshooting; the local copy is always kept regardless if a push
     can't be confirmed. The GUI equivalent of `--keep-local`.
-
-Once you've entered/browsed to a box path, the Subject field's placeholder
-suggests the next unclaimed subject (see `processing_log.csv` below) --
-type over it if you're reviewing something else.
 
 Fill it in, click Start, and it proceeds exactly as if you'd typed the
 equivalent CLI flags (`--stage 1`, `--stage 2 --channels <channel>`, or
@@ -681,9 +717,11 @@ physioProcess computes them later from your corrected peaks.
 - Until physioProcess adds its per-sample dropout mask (request R1), files
   say so at the start ("no per-sample PPG dropout mask yet"), and dropouts
   aren't flagged for you: look for the low arcs yourself.
-- A long gap may be a real long beat, e.g. after a premature beat
-  [UNVERIFIED: need PMID lookup for "premature beats can give weak or absent
-  pulses"]; look before changing anything.
+- A long gap may be a real long beat, e.g. after a premature beat, which can
+  give a weak pulse or none: pulse pressure fell as ventricular premature
+  beats came earlier, and early enough ones abolished it (Otsuji et al.,
+  1993, Eur Heart J 14:1044-1049, PMID 7691601). Look before changing
+  anything.
 
 The session summary lists PPG markers not on a crest of a pulse (i.e. on a
 slope; either crest of a double-crested or flat-topped pulse passes, since
@@ -892,7 +930,7 @@ their own ECG template" above. Run `--stage 1` first, drop `--stage 2` for
 the combined flow (which builds one for you automatically), or add
 `--ecg-source batch` if this file's ECG doesn't need Stage A at all.
 
-Saves `<same folder>\sub-XXX_ses-runY_task-sdi_physio_annotations_<initials>.json`
+Saves `<same folder>\sub-XXX_ses-runY_task-sdi_annotations_<initials>.json`
 alongside the input file. Running it again with a different RA's initials on
 the same file produces a second, separate JSON rather than overwriting the
 first — so more than one RA can independently review the same recording.
@@ -941,18 +979,17 @@ If `processing_log.csv` is open in Excel when a write is attempted, you'll
 see a clear message telling you so — your actual annotation output is
 already saved separately by that point and is unaffected either way.
 
-Every write also refreshes a local, read-only mirror --
-`processing_log_READONLY_SNAPSHOT.csv`, in the `physioCorrection/` folder
-(one level up from `multisignal_annotation/`) -- matching exactly the
-existing notebooks' own convention (same filename, same location), so
-there's one shared, most-recent snapshot regardless of which tool wrote
-last. The real log always lives on Box; this is just a convenience copy
-that goes stale the moment anyone else processes data, hence the name.
-An **installed** copy (a clone of the public repo, such as the shared lab
-install in `C:\Users\Public\Downloads\pebbl`) writes the snapshot to the
-user's own home folder instead, because the log holds participant IDs, RA
-initials and comments, and the folder above a shared install is readable by
-everyone (2026-10-05; `processing_log.default_snapshot_dir()`).
+Every write also refreshes a local, read-only mirror,
+`processing_log_READONLY_SNAPSHOT.csv`. The real log always lives on Box;
+this is just a convenience copy that goes stale the moment anyone else
+processes data, hence the name. A git clone of this repository (every
+install, including the shared lab install in
+`C:\Users\Public\Downloads\pebbl`, and a development clone) writes it to the
+user's own home folder, because the log holds participant IDs, RA initials
+and comments, and the folder above a shared install is readable by everyone
+(2026-10-05). A copy of the code that isn't a git clone writes it to the
+folder above the code instead, where the lab's old notebooks kept theirs
+(`processing_log.default_snapshot_dir()`).
 
 ### Choosing the ECG seed source: `--ecg-source`
 
@@ -1153,6 +1190,7 @@ has `sub-001_ses-run1_task-sdi_annotations_hlu.log` beside it.
 ```json
 {
   "schema_version": 2,
+  "coordinate_space": "tsv row index at sampling_rate (row 0 = the file's first row); point indices are rows; bad_segments are [start, end)",
   "initials": "hlu",
   "timestamp": "2026-09-26 16:03:00",
   "source_file": "...",
@@ -1160,7 +1198,8 @@ has `sub-001_ses-run1_task-sdi_annotations_hlu.log` beside it.
   "channels": {
     "ecg": {"mode": "point", "indices": [123, 456, ...], "snap_window_samples": 50, "status": "complete",
             "reviewed_span": [0, 742091], "guide_shown": true,
-            "provenance": {"number_of_samples": 742091, "pipeline_commit": "715c747...", "signal_sha256": "9ac7..."},
+            "provenance": {"number_of_samples": 742091, "pipeline_commit": "715c747...", "signal_sha256": "9ac7...",
+                           "signal_sha256_def": "physioprocess-column-sha256-v1"},
             "edit_history": [{"saved_at": "2026-09-26 16:03:00", "initials": "hlu", "started_from": "QRS template (...)",
                               "added": [5180], "removed": [5010], "moved": [[9100, 9112]]}]},
     "rsp": {"mode": "segment", "bad_segments": [[0, 742000]], "status": "complete",
@@ -1179,7 +1218,7 @@ has `sub-001_ses-run1_task-sdi_annotations_hlu.log` beside it.
 naming the file and changes nothing. That happens when the file is unreadable or
 damaged, when it was saved at a different sampling rate, or when it has marks
 outside the data file or not whole sample numbers. A save over a damaged file
-writes the session to `..._RESCUED_<date>.json` instead, so no work is lost.
+writes the session to `..._RESCUED_<YYYYMMDD_HHMMSS>.json` instead, so no work is lost.
 `check_reprocess_alignment.py` reports unreadable RA files as
 `UNREADABLE_RA_FILE`; before, it skipped them.
 
@@ -1213,8 +1252,10 @@ sidecar's `MachineQC`). Version 2 (2026-09-26) adds, per channel:
 - `guide_shown` (ECG, SBP, DBP, RSP, EDA): true if the channel's guide row
   was on screen in any saved session (each `edit_history` entry also records
   it for that session);
-- `<channel>_points_legacy`: an earlier review made in an older mode (e.g.
-  RSP breath peaks), kept rather than lost.
+- `<channel>_points_legacy` (or `_segments_legacy`, or `_unknown_legacy` for
+  an unrecognized mode; `..._legacy_2`, `_3` and so on if the name is taken):
+  an earlier review made in an older mode (e.g. RSP breath peaks), kept
+  rather than lost.
 - `bad_ecg` (with `ecg`, since 2026-09-27): the ECG's bad stretches, as a
   segment entry. It starts blank (no machine check for ECG). Mark bad only
   where R peaks can't be located; correct them wherever you can. `ecg` never
@@ -1235,7 +1276,9 @@ reads) has the same per-channel `mode` / `indices` / `bad_segments` /
   reviewer A's, and only reviewer B's; a final mark in none of them was added
   by the reconciler;
 - `edit_history`: one entry for the reconciliation session;
-- for ECG, `guide_shown_by` ({reconciler, reviewer A, reviewer B}) and
+- for each channel with a guide row (ECG, SBP, DBP, RSP, EDA),
+  `guide_shown_by` (`{"adjudicator": ..., "<A>": ..., "<B>": ...}`; the
+  reconciler's key keeps the role's old name, "adjudicator") and
   `guide_shown` (true if the guide was on for any of them).
 
 Its `agreement` statistics are at the top level, keyed by channel. It
@@ -1403,7 +1446,8 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   byte-identical with and without it), unit labels from the sidecar, the PPG
   gate and checks, provenance and edit history, the reprocess PPG check, and
   the practice PPG; the content hash reproduces physioProcess's published
-  sub-001 test vectors.
+  sub-001 test vectors and, with no real data needed, the hashes
+  physioProcess's reference script gives a synthetic file.
 - `physio_io.py` — reads a real `physio.tsv.gz`, or generates synthetic
   demo data; builds the `mne.RawArray`; computes display scalings
   (NaN-safe, data-driven); resolves a real file's path from
@@ -1441,10 +1485,10 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   3), or a synthetic-demo-data checkbox. Any CLI flag at all skips this
   and uses the normal prompt-driven CLI instead.
 - `processing_log.py` — `append_processing_log_entry()` (writes directly
-  to `<box_path>/processing_log.csv`, matching the existing notebooks'
-  exact column shape, then mirrors it to a local read-only snapshot) and
-  `find_next_available_subject()` (the autodetected-next-subject
-  suggestion). See "`processing_log.csv`" above.
+  to `<box_path>/processing_log.csv`, with the notebooks' columns plus
+  `Value_ranges`, then mirrors it to a local read-only snapshot) and
+  `find_next_available_subject()` (no longer used: the form stopped
+  suggesting a subject on 2026-09-27). See "`processing_log.csv`" above.
 - `reconcile.py` — Stage 3's diffing (`match_points()`/`match_segments()`)
   and orchestration (`build_reconciliation_raw()`, `export_reconciled()`,
   `save_reconciled_json()`, `run_stage_c()`). See "Stage 3" above.
@@ -1455,10 +1499,6 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   `step2_physio_correction.ipynb`'s old `*_ecg_final.json` output to this
   tool's `*_annotations_<initials>.json` shape, read-only unless `--apply`
   is passed. See "Migrating old step2_physio_correction.ipynb output" above.
-- `template_preview_gui.py` — the PyQt6 + embedded-matplotlib dialog shown
-  after building a candidate template, before it's applied/saved: overlaid
-  raw beats + the averaged template, with Approve / Try a Different Window
-  buttons.
 - `test_smoke.py` — non-interactive test of Stage B's plumbing (data load →
   Raw → seed → simulated edits → export → JSON round-trip), the
   EMG-flatline display-scaling regression check, NaN-safety/real-data
@@ -1487,10 +1527,10 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   only a subset of the usual columns (e.g. no PPG/EDA, or ECG-only), an
   unrecognized extra column, or real (non-placeholder) EMG data.
 - `test_real_data.py` — runs the same non-interactive checks against every
-  real `test_input/**/*_physio.tsv.gz` file found locally (recursive, so a
-  whole-folder Box copy like `test_input/sub-XXX/ses-runY/beh/...` works;
-  skips cleanly if none are present -- this repo doesn't ship real subject
-  data). This is what caught the PPG-NaN scaling bug above -- synthetic
+  real `*_physio.tsv.gz` file in the local test data (`testdata.py`;
+  recursive, so a whole-folder Box copy like `sub-XXX/ses-runY/beh/...`
+  works; prints SKIPPED if none are present -- this repo doesn't ship real
+  subject data). This is what caught the PPG-NaN scaling bug above -- synthetic
   data never would have -- and later confirmed a `processPPG()` fix (PPG
   resampled/time-aligned via `merge_asof` instead of index-merged at its
   native ~31 Hz) by showing 0% NaN and a physiologically plausible peak
@@ -1594,8 +1634,31 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   the most recent of several matching rows, and an `--initials-for`
   override), a clean skip when no log row resolves, dry-run vs. `--apply`,
   and confirming the original `*_ecg_final.json` is never touched.
+- `test_pebbl_launcher.py` — tests `pebbl_launcher.py` with git and pip
+  mocked (a development copy is never pulled; plain messages when git or the
+  pull fails; requirements reinstalled only when they change; the form
+  opens), and in item 6 `setup_lab_computer.sh`.
+- `test_docs.py` — checks `docs/index.html` is up to date with the manual's
+  source, and that the files GitHub Pages needs exist.
+- `run_tests.py` — runs every suite and summarizes them (see "Running the
+  tests").
+- `testdata.py` — where the tests find real test data (`PEBBL_TEST_INPUT`
+  or `test_input/`), and the `SKIPPED:` line a check prints without it.
+- `pebbl_launcher.py` — what the start scripts run: updates PEBBL, reinstalls
+  the requirements when they change, and opens the form again after each
+  session (see "Setup").
+- `session_log.py` — writes each RA's session log (see "The session log").
+- `Set up PEBBL.bat`, `setup_pebbl.sh`, `Start PEBBL.bat`,
+  `Start PEBBL.command` — one-time setup and the start scripts, for Windows
+  and Mac (see "Setup").
+- `setup_lab_computer.sh` — the shared install on a lab computer (see
+  "Setup").
+- `docs/` — the user manual (`PEBBL_User_Manual.html`, its PDF and web page
+  `index.html`, screenshots in `img/`), `build_manual_pdf.py`,
+  `capture_manual_shots.py`, and `FORMATS.md`, the files PEBBL reads and
+  writes.
 
-Run any test suite with `annotate_env\Scripts\python.exe <test_file>.py`.
+Run the suites with `run_tests.py` (see "Running the tests").
 
 ## Known open questions (not addressed yet, by design)
 
@@ -1637,7 +1700,8 @@ dependencies) in HANDOFF.md §10. Current status:
 - **DONE** (§12): logging to `processing_log.csv` (claim entries, one row
   per Stage A run, a generalized `"<channels> reviewed"` row for Stage B),
   an open-ended comment prompt recorded in the same rows, suggesting the
-  next unclaimed subject (console message + GUI placeholder text), and
+  next unclaimed subject (console message + GUI placeholder text; removed
+  on 2026-09-27, when assignments moved to the tracking spreadsheet), and
   exposing `--template-start` in the GUI for Step 1.
 - **DONE** (§13): labeled numeric event-code markers, described above.
 - **DONE, in a different form than originally asked** (§14): rather than a
