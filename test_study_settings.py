@@ -326,6 +326,8 @@ def main():
         lines = [line for line in out.getvalue().splitlines() if line.startswith("sub-041 run 1:")]
         assert "Study profile: Demo urglab" in out.getvalue() and lines, out.getvalue()[-1500:]
         assert "MISSING" not in lines[0].upper(), lines
+        # 30-s synthetic files can't fit the checker's 30-s ECG windows plus the lag search: it says so.
+        assert "too short to compare" in lines[0] and " Hz)" not in lines[0], lines
         print(f"   OK: {lines[0]}")
     finally:
         reset()

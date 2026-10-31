@@ -342,6 +342,9 @@ def compare_run(old_path, new_path, sfreq_expected=None, max_lag_sec=2.0, saved_
         result["lag_samples"] = lag
     else:
         status = "UNCLEAR"
+        if not lags:  # no window fitted: say why rather than leave a bare UNCLEAR (Phase 3)
+            result["note"] = (f"too short to compare: each ECG window needs {WINDOW_SEC} s plus {max_lag_sec:g} s "
+                              f"either side")
     if saved_max_index is not None:
         result["max_saved_index"] = int(saved_max_index)
         result["saved_index_past_end"] = bool(saved_max_index >= len(new_df))
@@ -424,7 +427,9 @@ def main(argv=None):
         if result.get("saved_index_past_end"):
             extra += "; a saved index is PAST THE END of the new file"
         if result.get("note"):
-            extra += f"; {result['note']} ({result.get('fs_old')} vs {result.get('fs_new')} Hz)"
+            rates = (f" ({result.get('fs_old')} vs {result.get('fs_new')} Hz)"
+                     if result["note"] == "sampling rates differ" else "")
+            extra += f"; {result['note']}{rates}"
         if result.get("unreadable_ra_files"):
             extra += f"; saved RA file(s) can't be read: {'; '.join(result['unreadable_ra_files'])}"
         if result.get("invalidated_channels"):

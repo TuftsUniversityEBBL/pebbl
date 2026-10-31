@@ -63,7 +63,7 @@ INITIALS_PATTERN = re.compile(r"^[a-z]{2,4}$")
 class ReviewLauncherDialog(QDialog):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Multisignal Physio Review")
+        self.setWindowTitle("Physiology in the EBBL (PEBBL)")
         self.setMinimumWidth(640)  # wide enough that no label or option is cut off (2026-10-04)
         self.result_values = None
 
@@ -594,9 +594,9 @@ def collect_inputs_via_gui():
     results include "run" instead (Step 1 has no "run", since it applies to
     every available run). Real-mode Step 2 results additionally include
     "ecg_source" ("auto" or "batch", default "auto"). Step 3 (reconciliation)
-    has no "initials" key at all -- it compares two already-saved sessions,
-    not one RA's current one -- and instead includes "compare_initials"
-    ("A,B", comma-joined).
+    results include "compare_initials" ("A,B", comma-joined: the two
+    reviewers being compared) as well as "initials", the reconciler's own
+    (recorded in the reconciled file; audit finding M2).
     """
     app = QApplication.instance() or QApplication([])
     dialog = ReviewLauncherDialog()

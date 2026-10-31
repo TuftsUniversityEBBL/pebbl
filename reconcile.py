@@ -3,7 +3,7 @@ Stage 3: reconciling two RAs' (or an RA's vs. a gold-standard reviewer's)
 independent annotation JSONs for the same subject/run.
 
 Design, agreed with the user before building:
-- Point channels (ecg/rsp/ppg/eda): two peaks within a tolerance derived
+- Point channels (ecg, ppg): two peaks within a tolerance derived
   from DEFAULT_SNAP_WINDOW_SEC (annotation_io.py) and this run's sfreq
   (~50ms by default, scaling with sampling rate) are "agreed"; anything
   left over is "only A" or "only B".

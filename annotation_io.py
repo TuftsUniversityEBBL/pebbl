@@ -1076,7 +1076,7 @@ def check_interval_regularity(channel_outputs, channel_configs, sfreq):
     (a likely missed peak) or unusually short (a likely extra/spurious
     peak) relative to that channel's OWN median gap, for every channel
     with channel_config.py's check_interval_regularity=True (currently
-    ecg/rsp/ppg, not eda -- see that flag's docstring for why). Prints a
+    ecg and ppg, the point channels -- see that flag's docstring). Prints a
     warning naming the channel, approximate time, and the actual gap
     versus the median, so the RA knows exactly where to look. Purely
     informational -- never modifies channel_outputs.

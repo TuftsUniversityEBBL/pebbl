@@ -184,13 +184,20 @@ def main():
     remaining = raw.annotations[1:]
     raw.set_annotations(remaining)
 
-    # Simulate an RA clicking near (not exactly on) a true ECG peak
+    # Simulate an RA drawing a box around (not exactly on) a true ECG peak whose seeded mark they deleted
+    # first. (Phase 3: this used to add a zero-duration "click" a few samples off and keep the seeded mark,
+    # so the check below passed whether or not the drawn mark was placed on the peak.)
     true_ecg_peaks = np.where(df["ecg_peaks"].to_numpy())[0]
-    target_peak = true_ecg_peaks[len(true_ecg_peaks) // 2]
-    sloppy_click_idx = target_peak - 7  # a few samples off, like an imprecise click
+    seeded_peak = int(true_ecg_peaks[len(true_ecg_peaks) // 2])
+    ecg_values = df["ecg"].to_numpy()
+    target_peak = seeded_peak - 20 + int(np.argmax(ecg_values[seeded_peak - 20:seeded_peak + 20]))
+    near_target = [i for i, a in enumerate(raw.annotations) if a["description"] == CHANNELS["ecg"]["point_label"]
+                   and abs(a["onset"] * sfreq - target_peak) < 0.05 * sfreq]
+    raw.annotations.delete(near_target)
+    sloppy_click_idx = target_peak - round(0.025 * sfreq)  # the box starts 25 ms early, like an imprecise drag
 
     extra_point = mne.Annotations(
-        onset=[sloppy_click_idx / sfreq], duration=[0.0],
+        onset=[sloppy_click_idx / sfreq], duration=[0.05],
         description=[CHANNELS["ecg"]["point_label"]], ch_names=[("ecg",)],
     )
     raw.set_annotations(raw.annotations + extra_point)
@@ -202,15 +209,16 @@ def main():
     raw.set_annotations(raw.annotations + bad_segment)
     print(f"   OK: raw now has {len(raw.annotations)} total annotations")
 
-    print("6. Exporting annotations (this is where snap-to-local-max happens)...")
+    print("6. Exporting annotations (this is where a drawn box becomes the highest sample inside it)...")
     channel_outputs = export_annotations(raw, df, CHANNELS, sfreq)
 
-    assert target_peak in channel_outputs["ecg"]["indices"], (
-        f"Expected the sloppy click at {sloppy_click_idx} to snap to the true peak "
-        f"at {target_peak}, but it did not."
+    ecg_indices = channel_outputs["ecg"]["indices"]
+    near = [i for i in ecg_indices if abs(i - target_peak) < 0.05 * sfreq]
+    assert near == [int(target_peak)], (
+        f"Expected the box drawn from {sloppy_click_idx} to become exactly one mark, on the true peak at "
+        f"{target_peak}; marks near it: {near}"
     )
-    print(f"   OK: sloppy click at index {sloppy_click_idx} correctly snapped to "
-          f"true local max at index {target_peak}")
+    print(f"   OK: the box drawn from index {sloppy_click_idx} became one mark, on the true peak at index {target_peak}")
 
     assert channel_outputs["emg_cor"]["bad_segments"] == [[2000, 2500]], (
         f"Expected [[2000, 2500]], got {channel_outputs['emg_cor']['bad_segments']}"
