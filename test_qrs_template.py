@@ -230,17 +230,19 @@ def main():
         shutil.rmtree(tmp_dir_3, ignore_errors=True)
 
     print("13. extract_and_refine_peaks()'s default snap_window_samples scales with sampling_rate "
-          "instead of a fixed 50-sample constant (regression check -- the same nominal sample count "
-          "meant a different real-world tolerance at different sampling rates; now it's derived from "
-          "DEFAULT_SNAP_WINDOW_SEC=0.05s so 500/1000/2000 Hz studies all get the same ~50ms window)...")
-    from annotation_io import DEFAULT_SNAP_WINDOW_SEC
+          "instead of a fixed sample count (regression check -- the same nominal sample count "
+          "meant a different real-world tolerance at different sampling rates; it's a time, the "
+          "built-in Step 1 seed window: 15 ms since 2026-10-31, 50 ms before)...")
+    import study_profile
+    seed_window_sec = study_profile.BUILT_IN_SEED_SNAP_MS / 1000
+    assert seed_window_sec == 0.015, seed_window_sec
     dummy_ecg = np.zeros(1000)
     dummy_wavelet = np.zeros(1000)
     dummy_template = np.zeros(50)
     dummy_adjustment = 0
-    for test_sfreq, expected_window in ((500, round(DEFAULT_SNAP_WINDOW_SEC * 500)),
-                                         (1000, round(DEFAULT_SNAP_WINDOW_SEC * 1000)),
-                                         (2000, round(DEFAULT_SNAP_WINDOW_SEC * 2000))):
+    for test_sfreq, expected_window in ((500, round(seed_window_sec * 500)),
+                                         (1000, round(seed_window_sec * 1000)),
+                                         (2000, round(seed_window_sec * 2000))):
         with patch.object(qrs_template_module, "snap_to_local_max", wraps=qrs_template_module.snap_to_local_max) as mock_snap:
             extract_and_refine_peaks(dummy_ecg, dummy_wavelet, dummy_template, dummy_adjustment,
                                       sampling_rate=test_sfreq)
@@ -249,11 +251,11 @@ def main():
                 assert actual_window == expected_window, (
                     f"at {test_sfreq} Hz expected window_samples={expected_window}, got {actual_window}"
                 )
-    assert round(DEFAULT_SNAP_WINDOW_SEC * 500) != round(DEFAULT_SNAP_WINDOW_SEC * 2000), (
+    assert round(seed_window_sec * 500) != round(seed_window_sec * 2000), (
         "sanity check that the test actually distinguishes different sampling rates"
     )
-    print(f"   OK: window scales as 25/50/100 samples at 500/1000/2000 Hz "
-          f"(all = {DEFAULT_SNAP_WINDOW_SEC * 1000:.0f}ms)")
+    print(f"   OK: window scales as {round(seed_window_sec * 500)}/{round(seed_window_sec * 1000)}/"
+          f"{round(seed_window_sec * 2000)} samples at 500/1000/2000 Hz (all = {seed_window_sec * 1000:.0f}ms)")
 
     print("\nALL QRS TEMPLATE TESTS PASSED.")
 

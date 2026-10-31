@@ -307,7 +307,7 @@ Optional settings (the built-in value in brackets):
 | `ppg_requires_timing_marker` | PPG review and the PPG guide need `Provenance.CTTiming` (`true`: the original study's pipeline history) |
 | `bad_ecg_from_machine_qc` | `bad_ecg` starts from `MachineQC.Channels.ecg`'s stretches (`false`: starts blank) |
 | `ecg_inversion_option` | the form offers "Flip the ECG (recorded upside down)", `--ecg-inverted` (`false`) |
-| `ecg_seed_snap_ms` | how far Step 1 moves each template-found R peak to the highest point, 0-200 ms; 0 leaves it where the template alignment put it (`50`) |
+| `ecg_seed_snap_ms` | how far Step 1 moves each template-found R peak to the highest point, 0-200 ms; 0 leaves it where the template alignment put it (`15`; 50 until 2026-10-31) |
 | `[event_labels]` | names shown beside event codes in the viewer, e.g. `50 = "baseline"` (numbers only) |
 
 **Flipping the ECG.** With `--ecg-inverted`, PEBBL negates the ECG in memory

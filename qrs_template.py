@@ -26,7 +26,7 @@ import pywt
 from scipy import signal
 
 import study_profile
-from annotation_io import DEFAULT_SNAP_WINDOW_SEC, DRAWN_PEAK_CLIMB_SEC, point_sample_from_annotation, write_json_atomic
+from annotation_io import DRAWN_PEAK_CLIMB_SEC, point_sample_from_annotation, write_json_atomic
 from channel_config import GUIDE_OPT_IN, GUIDE_TEXT
 from provenance import new_pipeline_ppg
 from template_preview_gui import show_template_preview
@@ -37,16 +37,14 @@ POINT_LABEL = "peak_ecg"
 def seed_snap_samples(sfreq):
     """
     How far (in samples) a template-found R peak, or an untouched seed in the
-    template window, may move to the highest raw-ECG sample:
-    DEFAULT_SNAP_WINDOW_SEC (50 ms) with the built-in settings, else the study
-    profile's ecg_seed_snap_ms. 0 leaves each where the template alignment put
-    it, for an rS complex whose small r (the mark, HLU 2026-10-31) has a
-    taller wave within 50 ms.
+    template window, may move to the highest raw-ECG sample: the study
+    profile's ecg_seed_snap_ms, 15 ms built in (study_profile.py). Until
+    2026-10-31 it was 50 ms (DEFAULT_SNAP_WINDOW_SEC), which could carry a
+    seed off a small r onto a taller wave up to 50 ms away; on the lab's test
+    recordings 15 ms put seeds on R tops as often as 50 ms did (HLU,
+    2026-10-31). 0 leaves each where the template alignment put it.
     """
-    snap_ms = study_profile.active().ecg_seed_snap_ms
-    if snap_ms == study_profile.BUILT_IN_SEED_SNAP_MS:
-        return round(DEFAULT_SNAP_WINDOW_SEC * sfreq)
-    return round(snap_ms / 1000 * sfreq)
+    return round(study_profile.active().ecg_seed_snap_ms / 1000 * sfreq)
 
 
 QRS_BAND_UPPER_HZ = 31.25
@@ -247,9 +245,8 @@ def extract_and_refine_peaks(raw_ecg_full, wavelet_filtered_full, qrs_template, 
     override the derived values explicitly. threshold_window_sec=None uses
     one whole-run threshold (the original behavior).
 
-    snap_window_samples defaults to DEFAULT_SNAP_WINDOW_SEC converted via
-    sampling_rate (not a fixed sample count) -- pass an explicit value
-    only to override that.
+    snap_window_samples defaults to seed_snap_samples(sampling_rate) (a time,
+    not a fixed sample count) -- pass an explicit value only to override that.
     """
     if snap_window_samples is None:
         snap_window_samples = seed_snap_samples(sampling_rate)

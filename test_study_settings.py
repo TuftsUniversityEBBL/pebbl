@@ -15,7 +15,7 @@ the built-in settings on the same file (negative control):
   5. bad_ecg_from_machine_qc: bad_ecg starts from MachineQC's ECG stretches;
      corrugator EMG starts from its own.
   6. event_labels: the viewer gets the names; built in, numbers only.
-  7. ecg_seed_snap_ms: Step 1's seed window.
+  7. ecg_seed_snap_ms: Step 1's seed window (15 ms built in, since 2026-10-31).
   8. ECG flip (--ecg-inverted): on an ECG recorded upside down, a drawn R
      peak lands on the true R only when flipped; the saved review records
      it; reopening it unflipped stops; the built-in settings refuse it.
@@ -169,7 +169,7 @@ def main():
         b = study_profile.BUILT_IN
         assert (b.runs, b.channels, b.practice, b.ppg_requires_timing_marker, b.bad_ecg_from_machine_qc,
                 b.ecg_inversion_option, b.ecg_seed_snap_ms, b.event_labels) == (["1", "2"], None, True, True, False,
-                                                                                False, 50, {})
+                                                                                False, 15, {})
         folder = os.path.join(tmp, "study")
         os.makedirs(folder)
         write_profile(folder)
@@ -236,13 +236,13 @@ def main():
         assert "event_id" not in seen and "task label is 'urglab'" in text
         print("   OK")
 
-        print("7. Step 1's seed window: 50 ms built in, the profile's otherwise...")
-        assert qrs_template.seed_snap_samples(1000) == 50
+        print("7. Step 1's seed window: 15 ms built in, the profile's otherwise...")
+        assert qrs_template.seed_snap_samples(1000) == 15 and qrs_template.seed_snap_samples(500) == 8  # built in
         study_profile.activate(p)
         assert qrs_template.seed_snap_samples(1000) == 0
         study_profile.activate(study_profile.StudyProfile(name="t", task="t", path="x", sha256="x",
-                                                          ecg_seed_snap_ms=15))
-        assert qrs_template.seed_snap_samples(1000) == 15 and qrs_template.seed_snap_samples(500) == 8
+                                                          ecg_seed_snap_ms=50))
+        assert qrs_template.seed_snap_samples(1000) == 50 and qrs_template.seed_snap_samples(2000) == 100
         reset()
         print("   OK")
 
