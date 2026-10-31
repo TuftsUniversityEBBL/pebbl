@@ -35,7 +35,6 @@ Design, agreed with the user before building:
 
 import contextlib
 import io
-import json
 import os
 from datetime import datetime
 
@@ -67,6 +66,7 @@ from annotation_io import (
     saved_channel_entries,
     split_saved_by_mode,
     unique_onsets,
+    write_json_atomic,
     companion_provenance,
     drop_peaks_in_bad_stretches,
     unknown_label_lines,
@@ -529,12 +529,12 @@ def save_reconciled_json(output_dir, file_stem, channel_outputs, sfreq, source_f
             existing_channels = saved_channel_entries(existing, out_path, what="reconciled file")
         except SystemExit as problem:
             rescue = os.path.join(output_dir, f"{file_stem}_annotations_reconciled_RESCUED_{stamp}.json")
-            with open(rescue, "w") as f:
-                json.dump({"schema_version": ANNOTATION_SCHEMA_VERSION, "coordinate_space": COORDINATE_SPACE,
-                           "initials": reconciler, "reconciled_by": reconciler, "reconciled_from": [label_a, label_b],
-                           "agreement": agreement or {}, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                           "source_file": source_file, "sampling_rate": sfreq, "channels": channel_outputs},
-                          f, indent=2)
+            write_json_atomic(rescue, {"schema_version": ANNOTATION_SCHEMA_VERSION, "coordinate_space": COORDINATE_SPACE,
+                                       "initials": reconciler, "reconciled_by": reconciler,
+                                       "reconciled_from": [label_a, label_b], "agreement": agreement or {},
+                                       "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                       "source_file": source_file, "sampling_rate": sfreq,
+                                       "channels": channel_outputs}, indent=2)
             raise SystemExit(f"{problem} This session's reconciliation was saved separately to {rescue}; give "
                              f"both files to the lab staff.")
         merged_channels = dict(existing_channels)
@@ -576,8 +576,7 @@ def save_reconciled_json(output_dir, file_stem, channel_outputs, sfreq, source_f
         **study_profile.active().saved_record(),  # only when a profile file is in use (study_profile.py)
     }
 
-    with open(out_path, "w") as f:
-        json.dump(payload, f, indent=2)
+    write_json_atomic(out_path, payload, indent=2)
 
     print(f"Saved reconciled annotations to {out_path}")
     return out_path

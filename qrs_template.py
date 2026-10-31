@@ -26,7 +26,7 @@ import pywt
 from scipy import signal
 
 import study_profile
-from annotation_io import DEFAULT_SNAP_WINDOW_SEC, DRAWN_PEAK_CLIMB_SEC, point_sample_from_annotation
+from annotation_io import DEFAULT_SNAP_WINDOW_SEC, DRAWN_PEAK_CLIMB_SEC, point_sample_from_annotation, write_json_atomic
 from channel_config import GUIDE_OPT_IN, GUIDE_TEXT
 from provenance import new_pipeline_ppg
 from template_preview_gui import show_template_preview
@@ -329,8 +329,7 @@ def save_qrs_template_outputs(output_dir, file_stem, initials, final_peaks, qrs_
         payload["ecg"]["ppg_guide_shown"] = bool(ppg_guide_shown)
     if study_profile.ecg_flipped():
         payload["ecg"]["inverted"] = True  # built on the flipped ECG (--ecg-inverted)
-    with open(json_path, "w") as f:
-        json.dump(payload, f)
+    write_json_atomic(json_path, payload)
 
     qrs_template.to_csv(csv_path, index=False)
 

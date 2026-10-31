@@ -324,6 +324,10 @@ def load_run_data(args):
         df, this_sfreq = load_physio_tsv(path)
         if sfreq is None:
             sfreq = this_sfreq
+        elif this_sfreq != sfreq:
+            # One rate serves every run (template, timing); a second rate used to be silently ignored (Phase 3).
+            raise SystemExit(f"Run {run} was recorded at {this_sfreq} Hz but the run before it at {sfreq} Hz, so "
+                             f"they can't be reviewed together. Nothing has been changed. Please tell the lab staff.")
         run_dfs[run] = df
         run_file_stems[run] = os.path.basename(path).replace("_physio.tsv.gz", "")
         run_out_dirs[run] = args.out_dir or os.path.dirname(os.path.abspath(path))
@@ -674,8 +678,10 @@ def _run_session(args, real_box_path, info):
             if real_box_path:
                 notes = _template_comment(results)
                 for run in results:
+                    # A practice session must never overwrite the real log's local snapshot (Phase 3: the
+                    # combined Step 1 + Step 2 flow from the command line missed this).
                     append_processing_log_entry(real_box_path, args.subject, run, initials,
-                                                 "created QRS template", notes)
+                                                 "created QRS template", notes, snapshot=not args.practice)
             template_json_path = find_template_json(target_out_dir, target_file_stem, initials=initials,
                                                       require_own_initials=True)
 
@@ -828,9 +834,9 @@ def _tracker_start_text(info):
     The opening reminder: set this session's channel(s) to "in progress" in
     the Google tracking spreadsheet, whose per-channel dropdowns are "in
     progress" / "finished" (HLU, 2026-09-27; it used to ask for dates).
-    None for synthetic data.
+    None for synthetic data and certification practice (subject 990 has no row; Phase 3).
     """
-    if info.get("synthetic"):
+    if info.get("synthetic") or info.get("practice"):
         return None
     who, run_text, columns, row = _tracker_names(info)
     if info.get("stage") == "1":
@@ -849,9 +855,9 @@ def _tracker_reminder_text(info):
     progress" when an RA starts a channel, "finished" when they finish it
     (HLU, 2026-09-27; it used to ask for dates). "finished" is asked for only
     when the RA ticked "finished" in the session summary. None for
-    synthetic demo data.
+    synthetic demo data and certification practice (Phase 3).
     """
-    if info.get("synthetic"):
+    if info.get("synthetic") or info.get("practice"):
         return None
     who, run_text, columns, row = _tracker_names(info)
     where = f"the {columns} column(s) of {row} for {who}{run_text} in the Google tracking spreadsheet"
@@ -914,7 +920,7 @@ def _main(session_log):
     # the session ends in an error.
     info = {"synthetic": args.synthetic, "stage": args.stage, "subject": args.subject, "run": args.run,
             "channels": [], "saved": False, "finished": False, "discarded": False, "ended_early": False,
-            "session_log": session_log}
+            "session_log": session_log, "practice": args.practice}
     exit_code = 0
     pending_exit = None
     use_local_copy = False

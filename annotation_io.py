@@ -13,6 +13,7 @@ import json
 import os
 import re
 import shutil
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Optional
@@ -240,14 +241,18 @@ def compute_event_transitions(df, event_col, sfreq):
     colors, which is exactly what's wanted here (no extra config needed).
 
     Returns an (N, 3) int array, or None if event_col isn't in df or its
-    value never changes (nothing to mark).
+    value never changes (nothing to mark). A missing value (NaN) is a gap:
+    no marker there, and a marker where a code resumes (Phase 3; NaN used to
+    become a meaningless huge integer code).
     """
     if event_col not in df.columns:
         return None
-    values = df[event_col].to_numpy()
+    values = df[event_col].to_numpy(dtype=float)
     if len(values) < 2:
         return None
-    change_indices = np.where(np.diff(values) != 0)[0] + 1
+    current, previous = values[1:], values[:-1]
+    changed = ~np.isnan(current) & ((current != previous) | np.isnan(previous))
+    change_indices = np.where(changed)[0] + 1
     if len(change_indices) == 0:
         return None
     event_ids = values[change_indices].astype(int)
@@ -373,7 +378,8 @@ def resolve_ecg_peaks(df, ecg_source, template_json_path):
         df = df.copy()
         df["ecg_peaks"] = False
         df.loc[corrected_peaks, "ecg_peaks"] = True
-        return df, f"QRS template ({template_json_path}, {len(corrected_peaks)} peaks)"
+        # The file name only: the full path held the RA's local working folder (Phase 3).
+        return df, f"QRS template ({os.path.basename(template_json_path)}, {len(corrected_peaks)} peaks)"
 
     return df, "batch pipeline (physioBatch.py's automated detection; no template JSON found)"
 
@@ -661,6 +667,28 @@ def read_saved_json(path, what="saved review file"):
         raise SystemExit(f"The {what} {os.path.basename(path)} isn't in the expected format. Nothing has been "
                          f"changed. Please tell the lab staff.")
     return payload
+
+
+def write_json_atomic(path, payload, **dump_kwargs):
+    """
+    Writes `payload` to `path` as JSON all at once: into a temporary file
+    beside it, then swapped in (os.replace), so a crash, a full disk or a
+    lost connection mid-write never leaves a half-written file where a saved
+    review was (Phase 3; retire_channels.py already wrote this way). The
+    bytes are the same as a plain open(path, "w") + json.dump(..., **dump_kwargs).
+    """
+    fd, tmp = tempfile.mkstemp(prefix=f".{os.path.basename(path)}.", suffix=".tmp",
+                               dir=os.path.dirname(os.path.abspath(path)))
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(payload, f, **dump_kwargs)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.remove(tmp)
+        raise
 
 
 def saved_channel_entries(payload, path, what="saved review file"):
@@ -1249,11 +1277,10 @@ def save_annotation_json(output_dir, file_stem, initials, channel_outputs, sfreq
             existing_channels = saved_channel_entries(read_saved_json(out_path), out_path)
         except SystemExit as problem:
             rescue = os.path.join(output_dir, f"{file_stem}_annotations_{initials}_RESCUED_{backup_stamp}.json")
-            with open(rescue, "w") as f:
-                json.dump({"schema_version": ANNOTATION_SCHEMA_VERSION, "coordinate_space": COORDINATE_SPACE,
-                           "initials": initials, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                           "source_file": source_file, "sampling_rate": sfreq, "channels": channel_outputs},
-                          f, indent=2)
+            write_json_atomic(rescue, {"schema_version": ANNOTATION_SCHEMA_VERSION, "coordinate_space": COORDINATE_SPACE,
+                                       "initials": initials, "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                       "source_file": source_file, "sampling_rate": sfreq,
+                                       "channels": channel_outputs}, indent=2)
             raise SystemExit(f"{problem} This session's work was saved separately to {rescue}; give both files "
                              f"to the lab staff.")
         carried_forward = [ch for ch in existing_channels if ch not in channel_outputs]
@@ -1283,8 +1310,7 @@ def save_annotation_json(output_dir, file_stem, initials, channel_outputs, sfreq
         **study_profile.active().saved_record(),  # only when a profile file is in use (study_profile.py)
     }
 
-    with open(out_path, "w") as f:
-        json.dump(payload, f, indent=2)
+    write_json_atomic(out_path, payload, indent=2)
 
     print(f"Saved annotations to {out_path}")
     return out_path
