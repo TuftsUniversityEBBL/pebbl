@@ -95,6 +95,10 @@ def load_run_data(args):
         df, this_sfreq = load_physio_tsv(path)
         if sfreq is None:
             sfreq = this_sfreq
+        elif this_sfreq != sfreq:
+            # One rate serves every run; a second rate used to be silently ignored (Phase 3).
+            raise SystemExit(f"Run {run} was recorded at {this_sfreq} Hz but the run before it at {sfreq} Hz, so "
+                             f"they can't be used together. Nothing has been changed. Please tell the lab staff.")
         run_dfs[run] = df
         run_file_stems[run] = os.path.basename(path).replace("_physio.tsv.gz", "")
         run_out_dirs[run] = args.out_dir or os.path.dirname(os.path.abspath(path))

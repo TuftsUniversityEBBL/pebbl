@@ -163,8 +163,17 @@ def read_sidecar(json_sidecar_path):
     """
     if not json_sidecar_path or not os.path.exists(json_sidecar_path):
         return {}
-    with open(json_sidecar_path, "r", encoding="utf-8-sig") as f:
-        return json.load(f)
+    # A damaged sidecar stops with a plain message, not a Python traceback (Phase 3).
+    try:
+        with open(json_sidecar_path, "r", encoding="utf-8-sig") as f:
+            meta = json.load(f)
+    except (OSError, UnicodeDecodeError, ValueError) as e:
+        raise SystemExit(f"The sidecar {os.path.basename(json_sidecar_path)} can't be read ({type(e).__name__}: "
+                         f"{e}). Nothing has been changed. Please tell the lab staff.")
+    if not isinstance(meta, dict):
+        raise SystemExit(f"The sidecar {os.path.basename(json_sidecar_path)} isn't in the expected format. Nothing "
+                         f"has been changed. Please tell the lab staff.")
+    return meta
 
 
 def load_physio_tsv(tsv_gz_path, json_sidecar_path=None):
@@ -172,25 +181,44 @@ def load_physio_tsv(tsv_gz_path, json_sidecar_path=None):
     Reads an existing sub-###_ses-run#_task-sdi_physio.tsv.gz file.
 
     Returns (df, sfreq) where df has the columns from the JSON sidecar
-    (falling back to REAL_PHYSIO_COLUMNS if no sidecar is found).
+    (REAL_PHYSIO_COLUMNS if the sidecar has no Columns list).
+
+    Stops, with a plain message and nothing changed, rather than guessing
+    (Phase 3): when there's no sidecar (it used to assume 1000 Hz and the
+    default columns, with only a printed note), when its sampling rate isn't
+    a positive number, or when its column list doesn't match the number of
+    fields in the file (too few names silently shifted every column; too
+    many gave all-empty columns).
     """
     if json_sidecar_path is None:
         json_sidecar_path = sidecar_path_for(tsv_gz_path)
+    name = os.path.basename(tsv_gz_path)
 
-    if os.path.exists(json_sidecar_path):
-        meta = read_sidecar(json_sidecar_path)
-        columns = meta.get("Columns", REAL_PHYSIO_COLUMNS)
-        if "SamplingFrequency" not in meta:
-            # Previously a silent 1000 Hz default (audit finding M4): a wrong
-            # rate would mis-time every peak and window without any error.
-            raise SystemExit(f"{json_sidecar_path} has no SamplingFrequency entry. Please ask the lab "
-                             f"staff to regenerate this file's sidecar before reviewing it.")
-        sfreq = meta["SamplingFrequency"]
-    else:
-        columns = REAL_PHYSIO_COLUMNS
-        sfreq = 1000
-        print(f"No JSON sidecar found at {json_sidecar_path}; "
-              f"assuming default columns and {sfreq} Hz.")
+    if not os.path.exists(json_sidecar_path):
+        raise SystemExit(f"There's no sidecar ({os.path.basename(json_sidecar_path)}) next to {name}, so PEBBL "
+                         f"can't tell its columns or sampling rate. Nothing has been changed. Please tell the "
+                         f"lab staff.")
+    meta = read_sidecar(json_sidecar_path)
+    columns = meta.get("Columns", REAL_PHYSIO_COLUMNS)
+    if not isinstance(columns, list) or not columns or not all(isinstance(c, str) for c in columns):
+        raise SystemExit(f"{json_sidecar_path} has a Columns entry that isn't a list of column names. Please "
+                         f"ask the lab staff to regenerate this file's sidecar before reviewing it.")
+    if "SamplingFrequency" not in meta:
+        # Previously a silent 1000 Hz default (audit finding M4): a wrong
+        # rate would mis-time every peak and window without any error.
+        raise SystemExit(f"{json_sidecar_path} has no SamplingFrequency entry. Please ask the lab "
+                         f"staff to regenerate this file's sidecar before reviewing it.")
+    sfreq = meta["SamplingFrequency"]
+    if isinstance(sfreq, bool) or not isinstance(sfreq, (int, float)) or not sfreq > 0:
+        raise SystemExit(f"{json_sidecar_path} has a SamplingFrequency that isn't a positive number ({sfreq!r}). "
+                         f"Please ask the lab staff to regenerate this file's sidecar before reviewing it.")
+    with gzip.open(tsv_gz_path, "rt", encoding="utf-8", newline="") as f:
+        first_line = f.readline().rstrip("\r\n")
+    n_fields = len(first_line.split("\t")) if first_line else 0
+    if n_fields != len(columns):
+        raise SystemExit(f"{name} has {n_fields} field(s) per row, but its sidecar names {len(columns)} column(s), "
+                         f"so PEBBL can't tell which column is which. Nothing has been changed. Please tell the "
+                         f"lab staff.")
 
     df = pd.read_csv(tsv_gz_path, sep="\t", compression="gzip", header=None, names=columns)
 

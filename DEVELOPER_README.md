@@ -1660,6 +1660,11 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   profiles are read and refused as they should be, a recording of another
   task stops the session, and saved files record the profile only when one
   is used.
+- `test_input_safety.py` — the Phase 3 safety fixes: a missing, damaged or
+  mismatched sidecar, a bad sampling rate and runs at different rates stop
+  with a plain message; a missing event value is a gap; saved JSON is
+  written all at once; reviews name the ECG template by file name only;
+  command-line practice never touches the real log's snapshot.
 - `test_study_settings.py` — tests each profile setting on a synthetic
   recording laid out like physiopipe's urglab output (runs, channels, PPG
   without CTTiming, bad_ecg and EMG from MachineQC, event names, Step 1's

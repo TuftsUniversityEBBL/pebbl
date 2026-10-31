@@ -23,8 +23,11 @@ Read by `physio_io.load_physio_tsv`.
 - A gzip-compressed, tab-separated text file with **no header row**. Row *i*
   is sample *i*. Line endings may be `\n` or `\r\n`.
 - Column names come from the sidecar's `Columns` list, in order (section 2).
-  Without a sidecar, or without `Columns`, PEBBL assumes `ecg, rsp, ppg, eda,
-  ecg_peaks, rsp_peaks, ppg_peaks, eda_peaks` (`physio_io.REAL_PHYSIO_COLUMNS`).
+  A sidecar without `Columns` means `ecg, rsp, ppg, eda, ecg_peaks,
+  rsp_peaks, ppg_peaks, eda_peaks` (`physio_io.REAL_PHYSIO_COLUMNS`). Either
+  way, the number of names must equal the number of fields in the file's
+  rows, or PEBBL stops: it never guesses which column is which.
+- A recording needs its sidecar: without one, PEBBL stops with a message.
 - Missing values are pandas' usual NA tokens (an empty field, `n/a`, `NaN`,
   `NA` and so on).
   - Signal columns keep them as NaN. A column that is entirely NaN counts as
@@ -36,17 +39,20 @@ Read by `physio_io.load_physio_tsv`.
   peaks the reviewer starts from). `rsp_peaks` and `eda_peaks` are read but
   not used. Other columns are used only if a channel in section 4 names them.
 - `event`, if present, is a whole-number code per sample, shown read-only
-  under the reviewed signal (section 4).
+  under the reviewed signal (section 4). A missing value there is a gap: no
+  marker, and a marker where a code resumes.
 
 ## 2. Input: the sidecar, `*_physio.json`
 
 The recording's path with `_physio.tsv.gz` replaced by `_physio.json`, read
-as UTF-8 (with or without a byte-order mark) by `physio_io.read_sidecar`.
+as UTF-8 (with or without a byte-order mark) by `physio_io.read_sidecar`. It
+must be a JSON object; a damaged or non-object sidecar stops PEBBL with a
+plain message.
 
 | Key | Read by | Expected | If absent |
 |---|---|---|---|
 | `Columns` | `load_physio_tsv`; `provenance.channel_provenance` | list of column names in file order | default columns (section 1); no signal hashes |
-| `SamplingFrequency` | `load_physio_tsv` | samples per second | PEBBL stops with a message. (If the whole sidecar is missing, it assumes 1000 Hz and prints a note.) |
+| `SamplingFrequency` | `load_physio_tsv` | samples per second, a positive number; runs loaded together must share it | PEBBL stops with a message (also for a non-number, or runs at different rates) |
 | `<column>` (top level, keyed by column name) → `Units`, `Description`, `TechnicalDescription` | `physio_io.sidecar_unit_labels`, `sidecar_descriptions` | strings | default unit labels; no descriptions |
 | `MachineQC.Channels.<channel>.BadSegments` | `physio_io.machine_qc_segments` | list of `[start, end)` whole-number pairs, `0 <= start < end <= N` | that channel starts with no pre-marked stretches, with a note |
 | `MachineQC.Channels.<channel>.SegmentsByReason` | `machine_qc_segments` | `{reason: [[start, end], ...]}` | stretches are shown without reasons |
@@ -321,15 +327,10 @@ Step 3 warns when a reviewer's setting differs from the reconciler's.
 
 ## What PEBBL does not check
 
-Known gaps, listed so a new data source doesn't trip on them silently:
+Since 2026-10-31 PEBBL stops, rather than guessing, on a missing or damaged
+sidecar, a `Columns` list that doesn't match the file, a sampling rate that
+isn't a positive number, and runs recorded at different rates (sections 1
+and 2). A known gap that remains:
 
-- The number of names in `Columns` is not compared with the number of fields
-  per row. Too few names silently shift every column; too many give all-NaN
-  columns.
-- A recording with no sidecar is read at an assumed 1000 Hz with only a
-  printed note.
-- `SamplingFrequency`'s type and value aren't checked. When two runs are
-  loaded together, only the first run's rate is used.
-- A malformed sidecar (invalid JSON) stops PEBBL with a Python error rather
-  than a plain message.
-- NaN in `event` is not handled.
+- A header row in the `.tsv.gz` is read as data (physioProcess and
+  physiopipe never write one).
