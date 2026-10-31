@@ -20,7 +20,7 @@ and, each optional, defaulting to the built-in behaviour:
     bad_ecg_from_machine_qc = true      # bad_ecg starts from MachineQC's ecg stretches (built in: no)
     ecg_inversion_option = true         # offer "flip the ECG" for upside-down recordings (built in: no)
     ecg_seed_snap_ms = 0                # Step 1 moves each template-found R peak to the highest
-                                        # point within this many ms (built in: 50; 0 = don't move)
+                                        # point within this many ms (built in: 15; 0 = don't move)
     [event_labels]                      # names shown beside event codes (built in: numbers only)
     0 = "off task"
     50 = "baseline"
@@ -55,7 +55,7 @@ BUILT_IN_TASK = "sdi"
 TASK_PATTERN = re.compile(r"^[A-Za-z0-9]+$")  # a BIDS label: letters and digits only
 SETTINGS = {"schema_version", "name", "task", "runs", "channels", "practice", "ppg_requires_timing_marker",
             "bad_ecg_from_machine_qc", "ecg_inversion_option", "event_labels", "ecg_seed_snap_ms"}
-BUILT_IN_SEED_SNAP_MS = 50  # annotation_io.DEFAULT_SNAP_WINDOW_SEC, in ms
+BUILT_IN_SEED_SNAP_MS = 15  # Step 1's seed window; 50 ms until 2026-10-31 (qrs_template.seed_snap_samples)
 FLAGS = {"practice": True, "ppg_requires_timing_marker": True, "bad_ecg_from_machine_qc": False,
          "ecg_inversion_option": False}  # each flag's built-in value
 
