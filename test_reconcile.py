@@ -236,6 +236,28 @@ def main():
     print(f"   OK: tolerance/snap window scales as 25/50/100 samples at 500/1000/2000 Hz "
           f"(all = {DEFAULT_SNAP_WINDOW_SEC * 1000:.0f}ms)")
 
+    print("11. agreement_statistics(): known answers worked out by hand (Phase 3)...")
+    from reconcile import agreement_statistics, format_agreement
+    configs = {"ecg": CHANNELS["ecg"], "eda": CHANNELS["eda"]}
+    a = {"ecg": {"indices": [100, 200, 300, 400]}, "eda": {"bad_segments": [[0, 2000]]}}
+    b = {"ecg": {"indices": [102, 204, 500]}, "eda": {"bad_segments": [[0, 1500], [5000, 6000]]}}
+    stats = agreement_statistics(a, b, configs, 1000, 10000, tolerance_samples=5)
+    # Peaks: 100~102 and 200~204 agree; 300, 400 only A; 500 only B.
+    assert stats["ecg"] == {"agreed": 2, "only_a": 2, "only_b": 1, "percent_agreement": 40.0,
+                            "median_timing_difference_ms": 3.0, "percent_of_a_matched": 50.0,
+                            "percent_of_b_matched": 66.7}, stats["ecg"]
+    # Samples: both bad 1500, both good 7000 -> po 0.85; pA 0.2, pB 0.25 -> pe 0.65; kappa 0.2/0.35 = 0.571.
+    # Seconds: A bad {0, 1}; B bad {0, 1 (half), 5} -> po 0.9; pe 0.62; kappa 0.28/0.38 = 0.737.
+    assert stats["eda"] == {"agreed": 1, "only_a": 0, "only_b": 1, "seconds_marked_a": 2.0, "seconds_marked_b": 2.5,
+                            "cohen_kappa_samples": 0.571, "cohen_kappa_seconds": 0.737}, stats["eda"]
+    text = format_agreement(stats, "aa", "bb")
+    assert "50.0% of aa's and 66.7% of bb's peaks matched (40.0% of all distinct peaks" in text, text
+    assert "kappa 0.737 per second (0.571 per sample" in text, text
+    none = agreement_statistics({"eda": {"bad_segments": []}}, {"eda": {"bad_segments": []}}, {"eda": CHANNELS["eda"]},
+                                1000, 10000, tolerance_samples=5)
+    assert none["eda"]["cohen_kappa_samples"] is None and none["eda"]["cohen_kappa_seconds"] is None
+    print(f"   OK: {text}")
+
     print("\nALL RECONCILE TESTS PASSED.")
 
 

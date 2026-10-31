@@ -219,17 +219,44 @@ def _segments_mask(segments, n_samples):
     return mask
 
 
+def _kappa(mask_a, mask_b):
+    """Cohen's kappa between two bad/not-bad masks; None when undefined (e.g. neither marked anything)."""
+    observed = float(np.mean(mask_a == mask_b))
+    pa, pb = float(np.mean(mask_a)), float(np.mean(mask_b))
+    expected = pa * pb + (1 - pa) * (1 - pb)
+    return round((observed - expected) / (1 - expected), 3) if expected < 1 else None
+
+
+def _second_bins(mask, sfreq):
+    """The mask in 1-second bins: a bin is bad when at least half its samples are (the last bin may be shorter)."""
+    width = max(1, int(round(sfreq)))
+    return np.array([mask[i:i + width].mean() >= 0.5 for i in range(0, len(mask), width)])
+
+
 def agreement_statistics(outputs_a, outputs_b, channel_configs, sfreq, n_samples, tolerance_samples):
     """
     Inter-rater agreement between two reviewers' saved outputs, per shared
     channel, for reporting reliability (audit finding M2):
-      point channels   -- agreed / only-A / only-B counts, percent agreement
-                          (agreed / all distinct marks), and the median
-                          absolute timing difference of agreed pairs (ms);
+      point channels   -- agreed / only-A / only-B counts; percent_agreement,
+                          agreed / all distinct marks (a Jaccard index, so
+                          lower than the share of either reviewer's marks
+                          that matched); percent_of_a_matched and
+                          percent_of_b_matched, agreed / each reviewer's own
+                          marks; and the median absolute timing difference
+                          of agreed pairs (ms);
       segment channels -- agreed / only-A / only-B segment counts, seconds
-                          marked by each reviewer, and Cohen's kappa over
-                          samples (bad vs. not bad; None when undefined,
-                          e.g. neither reviewer marked anything).
+                          marked by each reviewer, Cohen's kappa over
+                          samples (bad vs. not bad), and over 1-second bins
+                          (cohen_kappa_seconds: a bin is bad when at least
+                          half its samples are). Neighbouring samples aren't
+                          independent judgments, so the per-sample kappa
+                          counts one decision about a stretch about a
+                          thousand times a second; the per-second one is
+                          closer to how a reviewer decides. Each is None
+                          when undefined (e.g. neither reviewer marked
+                          anything).
+    The per-reviewer percentages and per-second kappa were added in Phase 3;
+    the earlier keys keep their meaning.
     """
     stats = {}
     for ch_key, cfg in channel_configs.items():
@@ -240,39 +267,44 @@ def agreement_statistics(outputs_a, outputs_b, channel_configs, sfreq, n_samples
             agreed, only_a, only_b = match_points(out_a["indices"], out_b["indices"], tolerance_samples)
             total = len(agreed) + len(only_a) + len(only_b)
             timing = [abs(a - b) * 1000 / sfreq for a, b in agreed]
+            marks_a, marks_b = len(agreed) + len(only_a), len(agreed) + len(only_b)
             stats[ch_key] = {
                 "agreed": len(agreed), "only_a": len(only_a), "only_b": len(only_b),
                 "percent_agreement": round(100 * len(agreed) / total, 1) if total else None,
                 "median_timing_difference_ms": round(float(np.median(timing)), 1) if timing else None,
+                "percent_of_a_matched": round(100 * len(agreed) / marks_a, 1) if marks_a else None,
+                "percent_of_b_matched": round(100 * len(agreed) / marks_b, 1) if marks_b else None,
             }
         elif cfg["annotation_mode"] == "segment":
             agreed, only_a, only_b = match_segments(out_a["bad_segments"], out_b["bad_segments"])
             mask_a = _segments_mask(out_a["bad_segments"], n_samples)
             mask_b = _segments_mask(out_b["bad_segments"], n_samples)
-            observed = float(np.mean(mask_a == mask_b))
-            pa, pb = float(np.mean(mask_a)), float(np.mean(mask_b))
-            expected = pa * pb + (1 - pa) * (1 - pb)
-            kappa = round((observed - expected) / (1 - expected), 3) if expected < 1 else None
             stats[ch_key] = {
                 "agreed": len(agreed), "only_a": len(only_a), "only_b": len(only_b),
                 "seconds_marked_a": round(float(mask_a.sum()) / sfreq, 2),
                 "seconds_marked_b": round(float(mask_b.sum()) / sfreq, 2),
-                "cohen_kappa_samples": kappa,
+                "cohen_kappa_samples": _kappa(mask_a, mask_b),
+                "cohen_kappa_seconds": _kappa(_second_bins(mask_a, sfreq), _second_bins(mask_b, sfreq)),
             }
     return stats
 
 
 def format_agreement(stats, label_a, label_b):
-    """One compact line, e.g. 'Agreement -- ecg: 97.3% (median 4.0 ms); eda: kappa 0.81'."""
+    """
+    One compact line, e.g. 'Agreement -- ecg: 98.9% of aa's and 99.1% of bb's peaks matched (98.0% of all
+    distinct peaks; 3 only aa, 2 only bb, median 4.0 ms); eda: kappa 0.80 per second (0.81 per sample; ...)'.
+    """
     parts = []
     for ch_key, s in stats.items():
         if "percent_agreement" in s:
             timing = f", median {s['median_timing_difference_ms']} ms" if s["median_timing_difference_ms"] is not None else ""
-            parts.append(f"{ch_key}: {s['percent_agreement']}% of peaks agreed ({s['only_a']} only {label_a}, "
-                         f"{s['only_b']} only {label_b}{timing})")
+            parts.append(f"{ch_key}: {s.get('percent_of_a_matched')}% of {label_a}'s and "
+                         f"{s.get('percent_of_b_matched')}% of {label_b}'s peaks matched ({s['percent_agreement']}% "
+                         f"of all distinct peaks; {s['only_a']} only {label_a}, {s['only_b']} only {label_b}{timing})")
         else:
-            parts.append(f"{ch_key}: kappa {s['cohen_kappa_samples']} ({s['agreed']} segments agreed, "
-                         f"{s['only_a']} only {label_a}, {s['only_b']} only {label_b})")
+            parts.append(f"{ch_key}: kappa {s.get('cohen_kappa_seconds')} per second ({s['cohen_kappa_samples']} per "
+                         f"sample; {s['agreed']} segments agreed, {s['only_a']} only {label_a}, "
+                         f"{s['only_b']} only {label_b})")
     return ("Agreement -- " + "; ".join(parts)) if parts else ""
 
 
