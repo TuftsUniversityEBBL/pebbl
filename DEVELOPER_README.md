@@ -1496,9 +1496,10 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   and uses the normal prompt-driven CLI instead.
 - `processing_log.py` — `append_processing_log_entry()` (writes directly
   to `<box_path>/processing_log.csv`, with the notebooks' columns plus
-  `Value_ranges`, then mirrors it to a local read-only snapshot) and
-  `find_next_available_subject()` (no longer used: the form stopped
-  suggesting a subject on 2026-09-27). See "`processing_log.csv`" above.
+  `Value_ranges`, then mirrors it to a local read-only snapshot). Its
+  `find_next_available_subject()`, unused since the form stopped suggesting
+  a subject on 2026-09-27, was removed on 2026-10-31. See
+  "`processing_log.csv`" above.
 - `reconcile.py` — Stage 3's diffing (`match_points()`/`match_segments()`)
   and orchestration (`build_reconciliation_raw()`, `export_reconciled()`,
   `save_reconciled_json()`, `run_stage_c()`). See "Stage 3" above.
@@ -1632,7 +1633,7 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   into `run_stage_b()`.
 - `test_processing_log.py` — tests `append_processing_log_entry()` (column
   shape, subject normalization, the local read-only snapshot mirror) and
-  `find_next_available_subject()`.
+  where the snapshot goes.
 - `test_reconcile.py` — tests `match_points()`/`match_segments()`,
   `build_reconciliation_raw()`, `export_reconciled()`, and a full
   `--stage 3` CLI end-to-end scenario with a deliberate RA disagreement.
