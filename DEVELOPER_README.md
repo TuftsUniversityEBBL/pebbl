@@ -1660,6 +1660,11 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   profiles are read and refused as they should be, a recording of another
   task stops the session, and saved files record the profile only when one
   is used.
+- `test_study_settings.py` — tests each profile setting on a synthetic
+  recording laid out like physiopipe's urglab output (runs, channels, PPG
+  without CTTiming, bad_ecg and EMG from MachineQC, event names, Step 1's
+  seed window, flipping an upside-down ECG, the form, the alignment check),
+  each against the built-in settings on the same file.
 - `pebbl_launcher.py` — what the start scripts run: updates PEBBL, reinstalls
   the requirements when they change, and opens the form again after each
   session (see "Setup").

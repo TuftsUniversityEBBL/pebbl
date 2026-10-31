@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+import study_profile
 from channel_config import CHANNELS, GUIDE_CHANNELS
 
 # The guide box's label and default by context (HLU, 2026-10-03): the PPG
@@ -190,6 +191,13 @@ class ReviewLauncherDialog(QDialog):
         self.ppg_guide_checkbox.setChecked(True)
         self._guide_context = None
         options_form.addRow(QLabel(""), self.ppg_guide_checkbox)
+        # Only in a study whose profile offers it (study_profile.py,
+        # ecg_inversion_option): the ECG was recorded upside down.
+        # The whole row is hidden otherwise, so the form looks exactly as before.
+        self.ecg_flip_checkbox = QCheckBox("Flip the ECG (recorded upside down)")
+        self._options_form, self._flip_row = options_form, options_form.rowCount()
+        options_form.addRow(QLabel(""), self.ecg_flip_checkbox)
+        options_form.setRowVisible(self._flip_row, False)
         layout.addLayout(options_form)
 
         # Options that can strand data or change template building are hidden
@@ -238,6 +246,9 @@ class ReviewLauncherDialog(QDialog):
         layout.addLayout(button_row)
 
         self._load_saved_settings()
+        self._profile_key = (None, None)  # the built-in settings, which the widgets above already show
+        self.box_path_edit.editingFinished.connect(self._apply_study_profile)
+        self._apply_study_profile()
         self._on_field_changed()
 
     # --- remembered settings -------------------------------------------------
@@ -264,6 +275,41 @@ class ReviewLauncherDialog(QDialog):
         settings.setValue("local_path", self.local_path_edit.text().strip())
         if self.initials_edit.text().strip():
             settings.setValue("initials", self.initials_edit.text().strip().lower())
+
+    def _apply_study_profile(self, *_args):
+        """
+        Fits the form to the data folder's study profile (study_profile.py):
+        its runs, the channels it reviews, whether practice is offered, and
+        whether 'Flip the ECG' is shown. Without one, the built-in settings:
+        the form as it has always been. Returns True if the form changed.
+        """
+        folder = self.box_path_edit.text().strip()
+        try:
+            profile = study_profile.load(folder) if folder and os.path.isdir(folder) else study_profile.BUILT_IN
+        except SystemExit as exc:
+            self.error_label.setText(str(exc))
+            profile = study_profile.BUILT_IN
+        key = (profile.path, profile.sha256)
+        if key == self._profile_key:
+            return False
+        self._profile_key = key
+        for combo in (self.run_combo, self.template_run_combo):
+            combo.clear()
+            combo.addItems(profile.runs)
+        self._channel_keys = [k for k in CHANNELS if profile.channels is None or k in profile.channels]
+        self.channel_combo.blockSignals(True)
+        self.channel_combo.clear()
+        for k in self._channel_keys:
+            self.channel_combo.addItem(CHANNELS[k]["label"], userData=k)
+        self.channel_combo.blockSignals(False)
+        if not profile.practice:
+            self.practice_checkbox.setChecked(False)
+        self.practice_checkbox.setVisible(profile.practice)
+        if not profile.ecg_inversion_option:
+            self.ecg_flip_checkbox.setChecked(False)
+        self._options_form.setRowVisible(self._flip_row, profile.ecg_inversion_option)
+        self._on_field_changed()
+        return True
 
     def _on_lab_staff_toggled(self, *_args):
         self.lab_staff_box.setVisible(self.lab_staff_checkbox.isChecked())
@@ -327,9 +373,10 @@ class ReviewLauncherDialog(QDialog):
         self.run_field_label.setEnabled(run_enabled)
 
         channel_enabled = (not is_synthetic) and (not is_step1)
-        if is_step1:
+        if is_step1 and "ecg" in self._channel_keys:
             ecg_index = self._channel_keys.index("ecg")
             self.channel_combo.setCurrentIndex(ecg_index)
+        self.ecg_flip_checkbox.setEnabled((not is_synthetic) and is_ecg)
         self.channel_combo.setEnabled(channel_enabled)
         self.channel_field_label.setEnabled(channel_enabled)
 
@@ -370,6 +417,7 @@ class ReviewLauncherDialog(QDialog):
         chosen = QFileDialog.getExistingDirectory(self, "Select the data folder (the one holding the sub-XXX folders)")
         if chosen:
             self.box_path_edit.setText(chosen)
+            self._apply_study_profile()
 
     def _browse_local_path(self):
         chosen = QFileDialog.getExistingDirectory(self, "Select local working folder")
@@ -384,6 +432,12 @@ class ReviewLauncherDialog(QDialog):
         return answer == QMessageBox.StandardButton.Yes
 
     def _on_submit(self):
+        if not self.synthetic_checkbox.isChecked() and self._apply_study_profile():
+            # The data folder's study settings changed the choices just now (e.g. the folder was typed and
+            # Start pressed at once): let the RA check them first.
+            self.error_label.setText("This data folder's study settings have just been applied. Check your "
+                                     "choices, then press Start again.")
+            return
         if self.step1_radio.isChecked():
             stage = "1"
         elif self.step3_radio.isChecked():
@@ -468,6 +522,9 @@ class ReviewLauncherDialog(QDialog):
             "no_local_copy": no_local_copy,
             "keep_local": self.keep_local_checkbox.isChecked(),
         }
+        if (not self.ecg_flip_checkbox.isHidden() and self.ecg_flip_checkbox.isChecked()
+                and (stage == "1" or self.channel_combo.currentData() == "ecg")):
+            common_values["ecg_inverted"] = True  # only in a study that offers it; added only when ticked
 
         if stage == "1":
             template_start_text = self.template_start_edit.text().strip()

@@ -28,7 +28,8 @@ from provenance import channel_provenance, new_pipeline_ppg, provenance_mismatch
 from channel_config import (COMPANION_CHANNELS, GUIDE_CHANNELS, GUIDE_CONTEXT_TEXT, GUIDE_COUNTER_LOSS_TEXT,
                             GUIDE_EXCEPTION_MAX_LISTED, GUIDE_EXCEPTION_REASONS, GUIDE_OPT_IN, GUIDE_PREMARK_REASONS,
                             GUIDE_PREMARKED_TEXT, GUIDE_TEXTS, PPG_ADD_PEAK_TEXT, REFERENCE_CHANNELS, check_review_alone,
-                            empty_channels, is_present, no_data_message, with_companions)
+                            empty_channels, is_present, machine_qc_source, no_data_message, uses_machine_qc,
+                            with_companions)
 from physio_io import (
     apply_unit_labels,
     build_raw,
@@ -321,6 +322,20 @@ def find_template_json(out_dir, file_stem, explicit_path=None, initials=None, re
     return os.path.join(out_dir, f"{file_stem}_ecg_corrected_qrs_none-found.json")
 
 
+def check_flip_matches(saved_flipped, what):
+    """
+    Stops when something saved earlier (a template, a review) was made with
+    the ECG flipped and this session isn't, or the other way round: its R
+    peaks would sit on the other side of the wave. Never fires with the
+    built-in settings, which have no flip.
+    """
+    if saved_flipped == study_profile.ecg_flipped():
+        return
+    was, box = ("made with", "Tick") if saved_flipped else ("made without", "Untick")
+    raise SystemExit(f"{what} {was} 'Flip the ECG (recorded upside down)', but this session is not the same. "
+                     f"{box} that box to match, then start again. Nothing has been changed.")
+
+
 def resolve_ecg_peaks(df, ecg_source, template_json_path):
     """
     Decides which ECG peaks to seed Stage B with, per --ecg-source:
@@ -346,6 +361,8 @@ def resolve_ecg_peaks(df, ecg_source, template_json_path):
 
     if ecg_source in ("template", "auto") and template_exists:
         payload = read_saved_json(template_json_path, what="ECG template file")
+        check_flip_matches(bool((payload.get("ecg") or {}).get("inverted")) if isinstance(payload.get("ecg"), dict)
+                           else False, "Your ECG template was")
         corrected_peaks = (payload.get("ecg") or {}).get("corrected_peaks") if isinstance(payload.get("ecg"), dict) \
             else None
         if not isinstance(corrected_peaks, list) or not all(
@@ -1339,12 +1356,13 @@ def check_saved_provenance(saved_channels, current_provenance, channel_configs, 
                              f"before continuing.")
 
 
-PPG_MASK_REASONS = ("zero_run", "bridged", "window_rule")
+PPG_MASK_REASONS = ("zero_run", "bridged", "window_rule", "rail", "ecg_coupling")
 """
 The per-sample PPG mask's reasons in MachineQC.ppg.SegmentsByReason
 (physioProcess R1): zero_run = 8+ consecutive native zeros, widened 0.6 s each
 side; bridged = rows more than 17.6 ms from the nearest native sample;
-window_rule = the 10-s pulsatility/periodicity rule.
+window_rule = the 10-s pulsatility/periodicity rule. rail and ecg_coupling are
+physiopipe's PPG window reasons (another study's pipeline, 2026-10-31).
 """
 
 
@@ -1458,6 +1476,8 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
         all_saved, saved_path = saved
         saved_channels, mode_changed = split_saved_by_mode(all_saved, full_channel_configs)
         check_saved_provenance(saved_channels, current_provenance, full_channel_configs)
+        if "ecg" in saved_channels:
+            check_flip_matches(bool(saved_channels["ecg"].get("inverted")), "Your saved ECG review was")
         # A saved PPG review with no provenance was made before 2026-09-26, on
         # the pre-fix PPG timing: never seed it onto this file's PPG. PPG starts
         # fresh and the old entry is kept under a legacy key (safety fix).
@@ -1499,10 +1519,10 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
     labels_by_key = {k: cfg["label"] for k, cfg in full_channel_configs.items()}
     if sidecar is not None and fresh_segment:
         # A companion reads its parent's machine check (bad_ppg <- MachineQC.ppg).
-        source = {k: full_channel_configs[k].get("machine_qc_source", k) for k in fresh_segment}
+        source = {k: machine_qc_source(k, full_channel_configs[k]) for k in fresh_segment}
         read, qc_note = machine_qc_segments(sidecar, len(df), only=set(source.values()), labels=labels_by_key)
         machine_qc = {k: read[src] for k, src in source.items() if src in read}
-        if qc_note and not any(full_channel_configs[k].get("machine_qc") for k in fresh_segment):
+        if qc_note and not any(uses_machine_qc(k, full_channel_configs[k]) for k in fresh_segment):
             qc_note = None  # e.g. an EMG-only session: the machine never checks EMG anyway
     mostly_flagged = [k for k, v in machine_qc.items()
                       if machine_qc_flagged_fraction(v, len(df)) > MACHINE_QC_FLAGGED_WARNING_FRACTION]
@@ -1604,6 +1624,13 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
     print("=" * 70 + "\n")
 
     plot_kwargs = {"events": events_array} if events_array is not None else {}
+    event_names = study_profile.active().event_labels
+    if events_array is not None and event_names:
+        # A study profile's names beside the codes ("50 baseline"); a code it doesn't name shows its number.
+        named = {f"{int(code)} {event_names[int(code)]}": int(code)
+                 for code in sorted(set(events_array[:, 2].tolist())) if int(code) in event_names}
+        if named:
+            plot_kwargs["event_id"] = named
 
     labels = ", ".join(full_channel_configs[k]["label"] for k in reviewed_keys)
     # Subject/run, channel(s) and reviewer in the window title, so a wrong-file
@@ -1649,6 +1676,8 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
             # annotations to the sample count plus this content hash (§4c, R7).
             if ch_key in current_provenance:
                 outputs[ch_key]["provenance"] = current_provenance[ch_key]
+            if ch_key == "ecg" and study_profile.ecg_flipped():
+                outputs[ch_key]["inverted"] = True  # reviewed flipped (--ecg-inverted); peaks are file samples
             # What "status" covers: the whole file (STATUS_VALUES).
             outputs[ch_key]["reviewed_span"] = [0, len(df)]
             # Per-session edit history: what the RA changed relative to what
@@ -1757,9 +1786,17 @@ def _warn_if_inverted(df, channel_configs):
             continue
         signal = df[ch_key].to_numpy(dtype=float)
         if np.nanmedian(signal[peaks]) < np.nanmedian(signal):
-            print("WARNING: the ECG peaks sit below the signal's typical level, so this ECG may be "
-                  "upside down. Peaks you add are moved to the nearest MAXIMUM, which would be the wrong "
-                  "point on an inverted ECG -- please tell the lab staff before reviewing this file.")
+            if study_profile.active().ecg_inversion_option:
+                # A study that offers the flip: say how to use it, and when not to (an rS complex
+                # recorded the right way up: mark the small r; HLU, 2026-10-31).
+                print("WARNING: the ECG's automatic peaks sit below the signal's typical level. If the whole ECG "
+                      "is upside down, close this session and start again with 'Flip the ECG (recorded upside "
+                      "down)' ticked. If it's the right way up with a small r and a deep S, don't flip it: mark "
+                      "the small r. Peaks you add are moved to the nearest MAXIMUM.")
+            else:
+                print("WARNING: the ECG peaks sit below the signal's typical level, so this ECG may be "
+                      "upside down. Peaks you add are moved to the nearest MAXIMUM, which would be the wrong "
+                      "point on an inverted ECG -- please tell the lab staff before reviewing this file.")
 
 
 STATUS_COMPLETE = "complete"

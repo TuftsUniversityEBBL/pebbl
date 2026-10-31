@@ -107,7 +107,7 @@ hold bad stretches.
 | `sbp`, `dbp` | segment | mmHg | MachineQC | |
 | `emg_cor`, `emg_zyg` | segment | | blank | placeholders: no detector |
 | `finger_temperature` | segment | | blank | placeholder: not collected in the original study |
-| `bad_ecg` | segment | | blank | companion of `ecg`: stretches where R peaks can't be located; no peaks are kept inside |
+| `bad_ecg` | segment | | blank (MachineQC's `ecg` entry with the profile setting `bad_ecg_from_machine_qc`) | companion of `ecg`: stretches where R peaks can't be located; no peaks are kept inside |
 | `bad_ppg` | segment | | MachineQC's `ppg` entry | companion of `ppg`, same rule |
 | `event` | (read-only) | code | | shown under the reviewed signal; never saved |
 
@@ -150,6 +150,7 @@ ASCII (non-ASCII characters are escaped, e.g. `µS`).
 | `seed` | segment channels pre-filled from MachineQC | `{source: "MachineQC", rule, segments, pipeline_commit[, by_reason]}`: what the reviewer started from |
 | `provenance` | when the recording has a sidecar | `{number_of_samples, pipeline_commit, signal_sha256, signal_sha256_def}`; companions add `column` (their parent's column) |
 | `guide_shown` | ECG, SBP, DBP, RSP, EDA | true if the guide row was on screen in any saved session |
+| `inverted` | ECG, only when true | the ECG was reviewed flipped (section 10) |
 | `edit_history` | all | one record per saved session, below |
 
 - **`signal_sha256`** is the SHA-256 of the channel's column exactly as
@@ -258,7 +259,8 @@ Written by `processing_log.append_processing_log_entry` in the data folder
 ## 9. Other files
 
 - **ECG template (Step 1):** `<stem>_ecg_corrected_qrs_<initials>.json`,
-  `{"ecg": {"corrected_peaks": [...], "initials": [...], "ppg_guide_shown": ...}}`,
+  `{"ecg": {"corrected_peaks": [...], "initials": [...], "ppg_guide_shown": ...}}`
+  (plus `"inverted": true` when built on a flipped ECG),
   and `<stem>_qrs_template_<initials>.csv`, the averaged beat in one column
   `y` (`qrs_template.save_qrs_template_outputs`). Earlier versions are backed
   up to `backups/` first.
@@ -285,6 +287,26 @@ schema_version = 1
 name = "My study"   # shown at the start of a session; recorded in saved files
 task = "mystudy"    # the recordings' task label (letters and digits)
 ```
+
+Optional settings (the built-in value in brackets):
+
+| Setting | Effect |
+|---|---|
+| `runs` | the runs PEBBL looks for and offers, as text, e.g. `["1"]` (`["1", "2"]`) |
+| `channels` | the channels offered, from section 4's keys (all) |
+| `practice` | whether certification practice is offered (`true`) |
+| `ppg_requires_timing_marker` | PPG review and the PPG guide need `Provenance.CTTiming` (`true`: the original study's pipeline history) |
+| `bad_ecg_from_machine_qc` | `bad_ecg` starts from `MachineQC.Channels.ecg`'s stretches (`false`: starts blank) |
+| `ecg_inversion_option` | the form offers "Flip the ECG (recorded upside down)", `--ecg-inverted` (`false`) |
+| `ecg_seed_snap_ms` | how far Step 1 moves each template-found R peak to the highest point, 0-200 ms; 0 leaves it where the template alignment put it (`50`) |
+| `[event_labels]` | names shown beside event codes in the viewer, e.g. `50 = "baseline"` (numbers only) |
+
+**Flipping the ECG.** With `--ecg-inverted`, PEBBL negates the ECG in memory
+for Steps 1-3, so its R peaks point up; the file, and so its signal hash, is
+unchanged, and saved peaks are file samples as always. The Step 1 template
+and the saved `ecg` entry record `"inverted": true`. A template or saved
+review made with the opposite setting stops the session with a message, and
+Step 3 warns when a reviewer's setting differs from the reconciler's.
 
 - PEBBL refuses a profile with an unknown setting, a wrong value, or text it
   can't read, with a plain message: a misspelled setting is never silently

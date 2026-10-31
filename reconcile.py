@@ -603,6 +603,14 @@ def run_stage_c(df, sfreq, channel_configs, out_dir, file_stem, source_file,
         tolerance_samples = round(DEFAULT_SNAP_WINDOW_SEC * sfreq)
 
     session_checks_before_viewer(channel_configs, sidecar, allow_old_ppg, df=df)
+    if "ecg" in channel_configs:
+        # Reviews made flipped (--ecg-inverted) and unflipped put R peaks on different sides of the wave.
+        differ = [label for label, out in ((label_a, outputs_a), (label_b, outputs_b))
+                  if bool((out.get("ecg") or {}).get("inverted")) != study_profile.ecg_flipped()]
+        if differ:
+            state = "flipped" if study_profile.ecg_flipped() else "not flipped"
+            print(f"WARNING: {', '.join(differ)} reviewed the ECG with 'Flip the ECG' set differently from this "
+                  f"session ({state}), so their R peaks may sit on another part of the wave. Check them closely.")
     # Companions ride with their parent (bad_ppg with PPG; HLU, 2026-09-27). A
     # review saved before bad_ppg existed counts as having no bad stretches.
     channel_configs = with_companions(channel_configs)
@@ -725,6 +733,8 @@ def run_stage_c(df, sfreq, channel_configs, out_dir, file_stem, source_file,
         for ch_key in outputs:
             if ch_key in current_provenance:
                 outputs[ch_key]["provenance"] = current_provenance[ch_key]
+            if ch_key == "ecg" and study_profile.ecg_flipped():
+                outputs[ch_key]["inverted"] = True  # reconciled flipped (--ecg-inverted)
             # What "status" covers: the whole file (annotation_io.STATUS_VALUES).
             outputs[ch_key]["reviewed_span"] = [0, len(df)]
             record = edit_record(session_baseline.get(ch_key), outputs[ch_key], tolerance_samples)
