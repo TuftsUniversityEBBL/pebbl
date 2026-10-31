@@ -42,6 +42,8 @@ from datetime import datetime
 import mne
 import numpy as np
 
+import study_profile
+
 
 from annotation_io import (
     ANNOTATION_SCHEMA_VERSION,
@@ -571,6 +573,7 @@ def save_reconciled_json(output_dir, file_stem, channel_outputs, sfreq, source_f
         "source_file": source_file,
         "sampling_rate": sfreq,
         "channels": merged_channels,
+        **study_profile.active().saved_record(),  # only when a profile file is in use (study_profile.py)
     }
 
     with open(out_path, "w") as f:

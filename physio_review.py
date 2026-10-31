@@ -81,6 +81,7 @@ from processing_log import append_processing_log_entry
 from qrs_template import run_stage_a
 from reconcile import run_stage_c
 from session_log import SessionLog, footer_lines as session_log_footer
+import study_profile
 
 
 def parse_args(argv=None):
@@ -158,6 +159,9 @@ def parse_args(argv=None):
                          help="Also show the PPG guide row under the ECG (Steps 1-3; off by default since 2026-10-03, HLU): each run's pulse sits a different delay after its R peaks, so use it for counting beats only, never to place an R peak.")
     parser.add_argument("--allow-old-ppg", action="store_true",
                          help="Lab staff only: allow PPG review on a file processed before the PPG timing fix.")
+    parser.add_argument("--study-profile", type=str, default=None,
+                         help="Lab staff only: the study profile (TOML) to use instead of the data folder's "
+                              f"{study_profile.PROFILE_FILE}, if any (see study_profile.py).")
     parser.add_argument("--force-template", action="store_true",
                          help="Build a new QRS template (Stage A) even if one already exists for this subject.")
     parser.add_argument("--template-run", choices=["1", "2"], default="1",
@@ -310,6 +314,7 @@ def load_run_data(args):
         if not path:
             continue
         print(f"Loading run {run}: {path}...")
+        study_profile.check_recording(path)
         df, this_sfreq = load_physio_tsv(path)
         if sfreq is None:
             sfreq = this_sfreq
@@ -395,7 +400,7 @@ def _attach_session_log(info, targets, initials, step_text):
     log = info.get("session_log")
     if log is not None:
         subject = "synthetic demo data" if info.get("synthetic") else f"sub-{str(info.get('subject')).replace('sub-', '')}"
-        log.attach(targets, initials, header_lines=[f"{subject}; {step_text}"])
+        log.attach(targets, initials, header_lines=[f"{subject}; {step_text}"] + study_profile.active().log_lines())
 
 
 def _run_session(args, real_box_path, info):
@@ -912,6 +917,14 @@ def _main(session_log):
         info["subject"] = args.subject
 
         real_box_path = args.box_path
+        # The study's settings (study_profile.py): a profile named with
+        # --study-profile, else the data folder's pebbl_study.toml, else the
+        # built-in ones. Read before the local copy, which holds only the
+        # subject's own folder.
+        profile = study_profile.load(None if args.synthetic else real_box_path, getattr(args, "study_profile", None))
+        study_profile.activate(profile)
+        if not profile.built_in:
+            print(f"Study profile: {profile.name} ({profile.path})")
         use_local_copy = (
             not args.synthetic
             and not (args.input_run1 or args.input_run2)
