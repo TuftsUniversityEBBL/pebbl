@@ -219,8 +219,11 @@ two reviewers' saved files, before the reconciler changes anything:
 
 | Mode | Keys |
 |---|---|
-| point | `agreed`, `only_a`, `only_b`: marks matched one-to-one, closest first, within 50 ms. `percent_agreement` = 100 × agreed / (agreed + only_a + only_b), the share of all distinct marks that both reviewers placed (a Jaccard index, so it is lower than "the share of A's marks that B also placed"); `null` with no marks. `median_timing_difference_ms`: the median absolute difference within agreed pairs. |
-| segment | `agreed`, `only_a`, `only_b`: stretches paired when their overlap is at least half their union. `seconds_marked_a`, `seconds_marked_b`. `cohen_kappa_samples`: Cohen's kappa over every sample of the file, each sample bad or not; `null` when undefined (e.g. neither marked anything). |
+| point | `agreed`, `only_a`, `only_b`: marks matched one-to-one, closest first, within 50 ms. `percent_of_a_matched` = 100 × agreed / (agreed + only_a), and `percent_of_b_matched` likewise: the share of each reviewer's marks the other also placed. `percent_agreement` = 100 × agreed / (agreed + only_a + only_b), the share of all distinct marks that both placed (a Jaccard index, lower than either per-reviewer share). Each is `null` with no marks. `median_timing_difference_ms`: the median absolute difference within agreed pairs. |
+| segment | `agreed`, `only_a`, `only_b`: stretches paired when their overlap is at least half their union. `seconds_marked_a`, `seconds_marked_b`. `cohen_kappa_seconds`: Cohen's kappa over 1-second bins, a bin bad for a reviewer when at least half its samples are. `cohen_kappa_samples`: the same over every sample; neighbouring samples aren't independent judgments, so prefer the per-second value. Each is `null` when undefined (e.g. neither marked anything). |
+
+`percent_of_a_matched`, `percent_of_b_matched` and `cohen_kappa_seconds` were
+added on 2026-10-31; reconciled files saved earlier don't have them.
 
 `only_a` and `only_b` are literal key names; `reconciled_from` says which
 reviewer is A.
