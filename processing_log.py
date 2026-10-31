@@ -14,7 +14,6 @@ made explicitly over keeping the legacy text -- see HANDOFF.md).
 """
 
 import csv
-import glob
 import os
 import shutil
 from datetime import datetime
@@ -214,41 +213,3 @@ def append_processing_log_entry(box_path, subject, run, initials, step, notes=""
         # back to Box (audit finding C2).
         print(f"\nNOTE: could not write to {log_path} ({type(exc).__name__}: {exc}). Your actual "
               f"annotation work was already saved separately and is NOT affected by this.")
-
-
-def find_next_available_subject(box_path):
-    """
-    NOT USED by the tool since 2026-09-27 (HLU): RAs are assigned files and
-    follow the Google tracking spreadsheet, so no subject is suggested. Kept,
-    with its tests, in case that changes.
-
-    Mirrors step1_qrs_template.ipynb's "next available subject" autodetect:
-    lists every sub-XXX folder directly under box_path, reads
-    processing_log.csv (if it exists) to find every subject with ANY log
-    entry at all (claimed OR further along), and returns the first
-    sub-XXX folder with no such entry. Returns None if box_path doesn't
-    exist, no sub-XXX folders are found, or every one found is already
-    claimed -- callers should treat None as "nothing to suggest", not an
-    error.
-    """
-    if not box_path or not os.path.isdir(box_path):
-        return None
-
-    all_subject_dirs = sorted(
-        os.path.basename(p) for p in glob.glob(os.path.join(box_path, "sub-*"))
-        if os.path.isdir(p)
-    )
-    if not all_subject_dirs:
-        return None
-
-    log_path = _log_path(box_path)
-    if not os.path.exists(log_path):
-        return all_subject_dirs[0]
-
-    log_df = pd.read_csv(log_path, dtype=str, keep_default_na=False)
-    claimed = set(log_df["Subject"].astype(str)) if "Subject" in log_df.columns else set()
-
-    for sub_dir in all_subject_dirs:
-        if sub_dir not in claimed:
-            return sub_dir
-    return None

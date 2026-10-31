@@ -2,9 +2,8 @@
 """
 Non-interactive tests for processing_log.py: appending entries to
 processing_log.csv in the same shape the existing notebooks already write,
-suggesting the next unclaimed subject, and mirroring to a local read-only
-snapshot (matching the notebooks' own processing_log_READONLY_SNAPSHOT.csv
-convention).
+and mirroring to a local read-only snapshot (matching the notebooks' own
+processing_log_READONLY_SNAPSHOT.csv convention).
 
 Run with: annotate_env\\Scripts\\python.exe test_processing_log.py
 """
@@ -17,7 +16,7 @@ from unittest.mock import patch
 import pandas as pd
 
 import processing_log
-from processing_log import append_processing_log_entry, find_next_available_subject
+from processing_log import append_processing_log_entry
 
 
 def main():
@@ -94,32 +93,9 @@ def main():
             assert box_content == snapshot_content, "snapshot must be an exact mirror of the box-hosted log"
             print(f"   OK: {os.path.basename(snapshot_path)} exactly mirrors {os.path.basename(log_path)}")
 
-            print("4. find_next_available_subject(): no processing_log.csv yet -> first sub-XXX folder found...")
-            tmp_dir_2 = tempfile.mkdtemp(prefix="processing_log_next_", dir=tmp_dir)
-            os.makedirs(os.path.join(tmp_dir_2, "sub-003"))
-            os.makedirs(os.path.join(tmp_dir_2, "sub-001"))
-            suggested = find_next_available_subject(tmp_dir_2)
-            assert suggested == "sub-001", f"expected the alphabetically-first folder, got {suggested}"
-            print(f"   OK: {suggested}")
-
-            print("5. find_next_available_subject(): skips any subject with ANY log entry at all...")
-            append_processing_log_entry(tmp_dir_2, "001", None, "hlu", "claimed")
-            suggested = find_next_available_subject(tmp_dir_2)
-            assert suggested == "sub-003", f"expected sub-003 (sub-001 is claimed), got {suggested}"
-            print(f"   OK: {suggested}")
-
-            print("6. find_next_available_subject(): every found subject already claimed -> None...")
-            append_processing_log_entry(tmp_dir_2, "003", None, "hlu", "claimed")
-            suggested = find_next_available_subject(tmp_dir_2)
-            assert suggested is None
-            print("   OK: None (nothing left to suggest)")
-
-            print("7. find_next_available_subject(): a nonexistent box_path returns None, not an error...")
-            assert find_next_available_subject(os.path.join(tmp_dir, "does-not-exist")) is None
-            print("   OK")
-
-            print("8. The snapshot updates again after a LATER write elsewhere makes the box copy "
+            print("4. The snapshot updates again after a LATER write elsewhere makes the box copy "
                   "more current (simulating someone else processing data)...")
+            tmp_dir_2 = tempfile.mkdtemp(prefix="processing_log_other_", dir=tmp_dir)
             append_processing_log_entry(tmp_dir_2, "999", None, "xyz", "claimed")  # a DIFFERENT box_path
             other_log_path = os.path.join(tmp_dir_2, "processing_log.csv")
             snapshot_content_after = open(snapshot_path).read()
@@ -130,7 +106,7 @@ def main():
             assert snapshot_content_after != box_content, "snapshot should have changed, not stayed stale"
             print("   OK: snapshot reflects the most recently written box-hosted log")
 
-        print("9. The snapshot's default place (HLU, 2026-10-05): the user's home folder for an installed "
+        print("5. The snapshot's default place (HLU, 2026-10-05): the user's home folder for an installed "
               "copy (its own git clone, e.g. the shared lab install), the folder above for a development "
               "checkout...")
         install = os.path.join(tmp_dir, "Public", "Downloads", "pebbl")
