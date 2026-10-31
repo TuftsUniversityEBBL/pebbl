@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 RA certification practice: a simulated participant (sub-990, runs 1 and 2)
-with known answers, an answer key, and automatic scoring (key version 5,
-HLU 2026-10-04).
+with known answers, an answer key, and automatic scoring (HLU 2026-10-04;
+the key's version is KEY_VERSION below).
 
     make   -- lab staff, once: writes sub-990 (runs 1 and 2) in the lab's
               usual sub-XXX/ses-runY/beh/*_physio.tsv.gz + .json layout into a

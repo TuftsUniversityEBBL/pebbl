@@ -152,7 +152,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);color:v
 <p>PEBBL never changes the recordings. It saves your marks in a separate file next to the recording in the data folder (for our lab, on Box), named with your initials.</p>
 <p>The work comes in three steps, which you pick in PEBBL's form:</p>
 <ul>
-  <li><strong>Step 1: Build ECG QRS template.</strong> Once per participant, before you review their ECG. You correct 20 seconds of heartbeats, and PEBBL uses them to find heartbeats in the rest of the recording.</li>
+  <li><strong>Step 1: Build ECG QRS template.</strong> Once per participant for each of you (every RA builds their own template), before you review their ECG. You correct 20 seconds of heartbeats, and PEBBL uses them to find heartbeats in the rest of the recording.</li>
   <li><strong>Step 2: Review a channel.</strong> Most of your work: one signal (a "channel") of one run at a time.</li>
   <li><strong>Step 3: Reconcile two reviewers.</strong> For reconcilers only.</li>
 </ul>
@@ -234,7 +234,7 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 </li>
 <li>
   <h3>Try the demo</h3>
-  <p>In the form, tick <strong>Use synthetic demo data</strong>, type your initials, choose <strong>Step 2</strong> and click <strong>Start</strong>. You get made-up practice data with no real participant in it, so explore freely: nothing you do here is kept.</p>
+  <p>In the form, choose <strong>Step 2</strong>, then tick <strong>Use synthetic demo data</strong> (ticking it locks the Step choice), type your initials and click <strong>Start</strong>. You get made-up practice data with no real participant in it, so explore freely: nothing you do here is kept.</p>
 </li>
 </ol>
 
@@ -327,14 +327,14 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 
 <h3>Close the viewer and save</h3>
 <figure class="small">
-  <img src="img/summary.png" alt="The Session summary window: changes this session, one thing to check, a comments box, the finished checkbox, and Go back, Discard and Save buttons." width="548" height="267">
+  <img src="img/summary.png" alt="The Session summary window: changes this session, one thing to check, a comments box, the finished checkbox, and Go back, Discard this session's changes, and Save buttons." width="548" height="267">
   <figcaption>The session summary appears when you close the viewer.</figcaption>
 </figure>
 <ul>
   <li><strong>Read what it asks you to check,</strong> such as an unusual gap between beats. Click <strong>Go back to the viewer</strong> to look. Leaving a flagged spot as it is is fine if the signal really looks like that.</li>
   <li><strong>Comments:</strong> note anything odd for the lab staff.</li>
   <li><strong>I've finished reviewing this for this run:</strong> tick it only when you've checked the whole run, start to end, including the parts before and after the task.</li>
-  <li><strong>Save.</strong> <em>Discard</em> throws away this session's changes and keeps your earlier saved work.</li>
+  <li><strong>Save.</strong> <em>Discard this session's changes</em> throws them away and keeps your earlier saved work.</li>
 </ul>
 <p>PEBBL then copies your file back to the data folder, checks it arrived, and deletes the local copy. Then the form opens again, ready for your next session. Update the tracking spreadsheet after each session. When you're done for the day, click <strong>Cancel</strong> on the form and wait for <em>PEBBL has closed</em> before closing the terminal window.</p>
 <p><strong>You can stop partway.</strong> Save without ticking <em>finished</em>. Next time, start PEBBL with the same participant, run, channel and initials, and it picks up where you left off.</p>
@@ -345,7 +345,7 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 
 <div class="chan">
 <h3>ECG <span class="what">Peaks on every R peak</span></h3>
-<p><strong>Step 1 first,</strong> once per participant. PEBBL shows 20 seconds of ECG with the computer's R peaks. Fix them and close the window. A preview then shows your beats as gray lines with their average in black. Click <strong>Approve Template</strong> if the beats line up. If they're messy, click <strong>Try a Different Window</strong> and run Step 1 again with <em>Template window start</em> set to 20 (then 40, and so on).</p>
+<p><strong>Step 1 first,</strong> once per participant (each of you builds your own). PEBBL shows 20 seconds of ECG with the computer's R peaks. Fix them and close the window. A preview then shows your beats as gray lines with their average in black. Click <strong>Approve Template</strong> if the beats line up. If they're messy, click <strong>Try a Different Window</strong> and run Step 1 again with <em>Template window start</em> set to 20 (then 40, and so on).</p>
 <div class="dodont">
   <div class="mark"><div class="h">Fix</div><ul>
     <li>Add a peak on any heartbeat without one.</li>
@@ -412,7 +412,7 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 <p>The review starts with the computer's marks: no reading, values out of range, SBP less than 10 above DBP, and no usable finger pulse. The finger-pulse guide row underneath shows why the last kind matters: where there's no usable pulse, the pressure values aren't real.</p>
 </div>
 
-<p>EMG and finger temperature aren't collected yet, so PEBBL leaves them out.</p>
+<p>EMG and finger temperature aren't collected in our study yet. The form still lists them; choosing one just tells you there's no data to review.</p>
 </section>
 
 <section id="certify">
@@ -453,8 +453,8 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 <div class="table-wrap"><table>
   <thead><tr><th>Marks</th><th>To pass</th></tr></thead>
   <tbody>
-    <tr><td>Peaks (ECG, PPG)</td><td>Every heartbeat or pulse has a mark within 20 ms (ECG) or 30 ms (PPG) of the key's, and there are no extra marks. On a two-humped pulse, either hump counts. Beats inside a stretch you correctly marked bad don't need marks.</td></tr>
-    <tr><td>Bad stretches (all channels)</td><td>At least 80% of each real artifact is marked bad. Real signal that looks odd, and the computer's mistaken marks, are no more than 25% marked. In all, no more than 2 seconds are marked bad where the signal is fine. Up to 2 seconds on either side of a finger-pulse dropout count as part of it.</td></tr>
+    <tr><td>Peaks (ECG, PPG)</td><td>Every heartbeat or pulse has a mark within 20 ms (ECG) or 30 ms (PPG) of the key's, and there are no extra marks. On a two-humped pulse, either hump counts. Beats inside a stretch you correctly marked bad don't need marks. Beats in a run's first half second and last second aren't scored, so a mark there never counts as extra.</td></tr>
+    <tr><td>Bad stretches (all channels)</td><td>At least 80% of each real artifact is marked bad. Real signal that looks odd, and the computer's mistaken marks, are no more than 25% marked. In all, no more than 2 seconds are marked bad where the signal is fine. Up to 1 second on either side of a real artifact counts as part of it (2 seconds for a finger-pulse dropout).</td></tr>
   </tbody>
 </table></div>
 <p>When every channel you practiced passes, tell the lab staff. Your score is also saved in your session log, so they can check it there.</p>
