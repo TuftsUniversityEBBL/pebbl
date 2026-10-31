@@ -10,11 +10,18 @@ given time to load and draw before printing (needs an internet connection).
 
 Run from anywhere:  annotate_env\\Scripts\\python.exe docs\\build_manual_pdf.py
 Optional:  --png  also saves a full-page PNG preview next to the PDF.
+           --pages-only  writes only index.html (below); no browser needed.
 Also renders the logo icon to img/pebbl_icon.png (transparent background) for
-the public repository's front page, from branding/pebbl_core.js.
+the public repository's front page, from branding/pebbl_core.js, and writes
+index.html: the manual as a standalone web page with a link to the PDF, which
+GitHub Pages serves from this docs folder at https://tufts-ebbl.github.io/pebbl/
+(Settings > Pages > Deploy from branch: main, /docs; the empty .nojekyll file
+makes it serve the folder as plain files). test_docs.py fails if index.html is
+out of date with PEBBL_User_Manual.html.
 """
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +30,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCE = os.path.join(HERE, "PEBBL_User_Manual.html")
 PDF = os.path.join(HERE, "PEBBL_User_Manual.pdf")
+INDEX = os.path.join(HERE, "index.html")
 BROWSERS = [
     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
     r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
@@ -85,7 +93,42 @@ def render_icon(common):
         os.remove(temp_html)
 
 
+def pages_index():
+    """
+    The manual as a standalone web page for GitHub Pages. The source is in the
+    artifact page format (no doctype, html, head or body), so this adds them:
+    the title, fonts and styles go in the head and everything from the page
+    div on goes in the body, which keeps the browser in standards mode. It
+    also adds a favicon and a "Download it as a PDF" link after the date line.
+    """
+    with open(SOURCE, encoding="utf-8") as f:
+        source = f.read()
+    marker = '<div class="page">'
+    if source.count(marker) != 1:
+        sys.exit(f"Expected exactly one {marker} in {SOURCE}")
+    head, body = source.split(marker)
+    body, n = re.subn(r'(<p class="meta">.*?)</p>',
+                      r'\1 <a href="PEBBL_User_Manual.pdf">Download it as a PDF</a>.</p>', marker + body, count=1,
+                      flags=re.S)
+    if n != 1:
+        sys.exit(f'Expected a <p class="meta"> line in {SOURCE}')
+    return ('<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
+            '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+            '<meta name="description" content="How to set up PEBBL and review each physiological signal.">\n'
+            '<link rel="icon" type="image/png" href="img/pebbl_icon.png">\n'
+            + head.strip() + "\n</head>\n<body>\n" + body.strip() + "\n</body>\n</html>\n")
+
+
+def write_pages_index():
+    with open(INDEX, "w", encoding="utf-8", newline="\n") as f:
+        f.write(pages_index())
+    print("wrote", INDEX)
+
+
 def main():
+    write_pages_index()
+    if "--pages-only" in sys.argv:
+        return
     with open(SOURCE, encoding="utf-8") as f:
         body = f.read()
     wrapped = ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
