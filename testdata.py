@@ -43,3 +43,15 @@ def all_physio_files():
 def skip(what):
     """Say that a check didn't run for lack of real data, in the form run_tests.py counts."""
     print(f"   SKIPPED: {what} (no real test data in {TEST_INPUT})")
+
+
+# The original study's settings as a minimal study profile: real data need one since 2026-11-01 (study_profile.py).
+SDI_PROFILE = 'schema_version = 1\nname = "sdi"\ntask = "sdi"\n'
+
+
+def sdi_profile(folder):
+    """Puts SDI_PROFILE in `folder` (a test's own temporary data folder) as pebbl_study.toml; returns its path."""
+    path = os.path.join(folder, "pebbl_study.toml")
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(SDI_PROFILE)
+    return path

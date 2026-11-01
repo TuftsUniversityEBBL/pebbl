@@ -55,6 +55,36 @@ PRACTICE_SUBJECT = "990"
 def practice_root_for(derivatives_path):
     """The practice folder: a 'practice' folder next to the data folder (for our lab, the Box derivatives folder)."""
     return os.path.join(os.path.dirname(os.path.normpath(derivatives_path)), "practice")
+
+
+def folder_status(folder):
+    """
+    What the form says under the data folder (HLU, 2026-11-01): the study the
+    folder belongs to, or why it can't be used. Returns (text, problem,
+    profile); profile is None unless the folder's study settings can be used.
+    """
+    if not folder:
+        return "", False, None
+    if not os.path.isdir(folder):
+        return "Can't find this folder.", True, None
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return "Can't open this folder. Please ask the lab staff for access.", True, None
+    has_participants = any(n.startswith("sub-") and os.path.isdir(os.path.join(folder, n)) for n in names)
+    if study_profile.PROFILE_FILE not in names:
+        if not has_participants:
+            return ("This isn't a data folder: it has no participant folders (sub-...) and no study settings "
+                    "file. Choose your study's data folder."), True, None
+        return (f"This folder has no study settings file ({study_profile.PROFILE_FILE}). If it is your study's "
+                "data folder, please ask the lab staff."), True, None
+    try:
+        profile = study_profile.load(folder)
+    except SystemExit as exc:
+        return str(exc), True, None
+    if not has_participants:
+        return f"Study: {profile.name}. There are no participant folders (sub-...) here yet.", True, profile
+    return f"Study: {profile.name}", False, profile
 from processing_log import initials_confirmation_text, known_initials
 
 # Same rule as physio_review.normalize_initials() (audit finding H6).
@@ -123,13 +153,18 @@ class ReviewLauncherDialog(QDialog):
 
         box_path_row = QHBoxLayout()
         self.box_path_edit = QLineEdit()
-        self.box_path_edit.setPlaceholderText(r"C:\Users\you\Box\DATA\Processed\physioProcessing\derivatives")
+        self.box_path_edit.setPlaceholderText("Your study's data folder (it holds the sub-XXX folders)")
         self.browse_button = QPushButton("Browse...")
         self.browse_button.clicked.connect(self._browse_box_path)
         box_path_row.addWidget(self.box_path_edit)
         box_path_row.addWidget(self.browse_button)
-        # Any folder holding the sub-XXX folders works; Box is our lab's (HLU, 2026-10-05).
+        # Any folder holding the sub-XXX folders and the study's pebbl_study.toml works; each study has its
+        # own (HLU, 2026-11-01).
         form.addRow(QLabel("Data folder:"), box_path_row)
+        # Which study the folder belongs to, or why it may be the wrong folder (folder_status).
+        self.study_label = QLabel("")
+        self.study_label.setWordWrap(True)
+        form.addRow(QLabel(""), self.study_label)
 
         self.subject_edit = QLineEdit()
         self.subject_edit.setPlaceholderText("e.g. 001")
@@ -292,17 +327,16 @@ class ReviewLauncherDialog(QDialog):
 
     def _apply_study_profile(self, *_args):
         """
-        Fits the form to the data folder's study profile (study_profile.py):
-        its runs, the channels it reviews, whether practice is offered, and
-        whether 'Flip the ECG' is shown. Without one, the built-in settings:
-        the form as it has always been. Returns True if the form changed.
+        Says which study the data folder belongs to, or why it can't be used
+        (folder_status), and fits the form to that study's profile
+        (study_profile.py): its runs, the channels it reviews, whether practice
+        is offered, and whether 'Flip the ECG' is shown. Until a usable
+        profile is read, the built-in choices. Returns True if the form changed.
         """
-        folder = self.box_path_edit.text().strip()
-        try:
-            profile = study_profile.load(folder) if folder and os.path.isdir(folder) else study_profile.BUILT_IN
-        except SystemExit as exc:
-            self.error_label.setText(str(exc))
-            profile = study_profile.BUILT_IN
+        text, self._folder_problem, profile = folder_status(self.box_path_edit.text().strip())
+        self.study_label.setText(text)
+        self.study_label.setStyleSheet("color: #c0392b;" if self._folder_problem else "color: #55616A;")
+        profile = profile or study_profile.BUILT_IN
         key = (profile.path, profile.sha256)
         if key == self._profile_key:
             return False
@@ -329,7 +363,7 @@ class ReviewLauncherDialog(QDialog):
         self.lab_staff_box.setVisible(self.lab_staff_checkbox.isChecked())
 
     def _set_real_fields_enabled(self, enabled):
-        for widget in (self.box_path_edit, self.browse_button, self.subject_edit,
+        for widget in (self.box_path_edit, self.browse_button, self.study_label, self.subject_edit,
                        self.step1_radio, self.step2_radio, self.step3_radio,
                        self.no_local_copy_checkbox, self.keep_local_checkbox):
             widget.setEnabled(enabled)
@@ -492,6 +526,9 @@ class ReviewLauncherDialog(QDialog):
             return self.accept()
 
         box_path = self.box_path_edit.text().strip()
+        if box_path and self._folder_problem:  # the line under the data folder says why
+            self.error_label.setText(self.study_label.text())
+            return
         subject = self.subject_edit.text().strip()
         local_path = self.local_path_edit.text().strip()
         no_local_copy = self.no_local_copy_checkbox.isChecked()
@@ -536,6 +573,8 @@ class ReviewLauncherDialog(QDialog):
             "no_local_copy": no_local_copy,
             "keep_local": self.keep_local_checkbox.isChecked(),
         }
+        if practice:  # the practice folder has no profile of its own: practice uses the study's
+            common_values["study_profile"] = os.path.join(derivatives_path, study_profile.PROFILE_FILE)
         if (not self.ecg_flip_checkbox.isHidden() and self.ecg_flip_checkbox.isChecked()
                 and (stage == "1" or self.channel_combo.currentData() == "ecg")):
             common_values["ecg_inverted"] = True  # only in a study that offers it; added only when ticked

@@ -18,6 +18,7 @@ import shutil
 import tempfile
 
 import check_reprocess_alignment as cra
+import testdata
 from physio_io import build_run_path, generate_synthetic_demo
 
 
@@ -40,6 +41,8 @@ def main():
     tmp = tempfile.mkdtemp(prefix="align_check_")
     try:
         old_root, new_root = os.path.join(tmp, "old"), os.path.join(tmp, "new")
+        os.makedirs(old_root)
+        testdata.sdi_profile(old_root)  # real data need a study profile (2026-11-01)
         df, fs = generate_synthetic_demo(duration_sec=150, seed=7)
         n = len(df)
 

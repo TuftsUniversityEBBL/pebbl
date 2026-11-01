@@ -50,9 +50,15 @@ def pump(n=5):
 
 
 def shot_form():
+    import simple_gui
+    import study_profile
     dlg = ReviewLauncherDialog()
     dlg.synthetic_checkbox.setChecked(False)
-    dlg.box_path_edit.setText(r"C:\Users\you\Box\DATA\Processed\physioProcessing\derivatives")
+    # An example study's data folder (it doesn't exist here): the line under it shows what a real one would.
+    dlg.box_path_edit.setText(r"C:\Users\you\Box\MyStudy\derivatives")
+    example = study_profile.StudyProfile(name="mystudy", task="mystudy", path="example", sha256="example")
+    with patch.object(simple_gui, "folder_status", return_value=("Study: mystudy", False, example)):
+        dlg._apply_study_profile()
     dlg.local_path_edit.setText(r"C:\Users\you\PhysioWorking")
     dlg.subject_edit.setText("001")
     dlg.initials_edit.setText("abc")

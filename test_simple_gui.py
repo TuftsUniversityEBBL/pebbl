@@ -16,10 +16,22 @@ import tempfile
 
 from PyQt6.QtWidgets import QApplication
 
+import simple_gui
+import testdata
 from simple_gui import ReviewLauncherDialog
 
 # Never read or write the real remembered settings (box path, initials) from tests.
 ReviewLauncherDialog.USE_SAVED_SETTINGS = False
+
+
+def make_data_folder(folder):
+    """A data folder the form accepts: a participant folder and the study's profile (HLU, 2026-11-01)."""
+    os.makedirs(os.path.join(folder, "sub-001"), exist_ok=True)
+    testdata.sdi_profile(folder)
+    return folder
+
+
+DATA_DIR = make_data_folder(tempfile.mkdtemp(prefix="simple_gui_data_"))
 
 
 def main():
@@ -69,7 +81,8 @@ def main():
 
     print("5. Real mode, Step 2, fully filled in -> accepted with the correct dict...")
     dlg = ReviewLauncherDialog()
-    dlg.box_path_edit.setText(r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives")
+    dlg.box_path_edit.setText(DATA_DIR)
+    dlg.box_path_edit.editingFinished.emit()  # as when the RA leaves the field
     dlg.subject_edit.setText("001")
     dlg.local_path_edit.setText(r"C:\Users\hlu\PhysioWorking")
     dlg.step2_radio.setChecked(True)
@@ -82,7 +95,7 @@ def main():
         "ppg_guide": True,
         "practice": False,
         "synthetic": False,
-        "box_path": r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives",
+        "box_path": DATA_DIR,
         "local_path": r"C:\Users\hlu\PhysioWorking",
         "subject": "001",
         "no_local_copy": False,
@@ -115,7 +128,8 @@ def main():
     print("7. Real mode, Step 1, fully filled in -> accepted with run=None, channel='ecg', "
           "template_start defaulting to 0.0...")
     dlg = ReviewLauncherDialog()
-    dlg.box_path_edit.setText(r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives")
+    dlg.box_path_edit.setText(DATA_DIR)
+    dlg.box_path_edit.editingFinished.emit()  # as when the RA leaves the field
     dlg.subject_edit.setText("001")
     dlg.local_path_edit.setText(r"C:\Users\hlu\PhysioWorking")
     dlg.step1_radio.setChecked(True)
@@ -126,7 +140,7 @@ def main():
         "ppg_guide": False,
         "practice": False,
         "synthetic": False,
-        "box_path": r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives",
+        "box_path": DATA_DIR,
         "local_path": r"C:\Users\hlu\PhysioWorking",
         "subject": "001",
         "no_local_copy": False,
@@ -143,7 +157,8 @@ def main():
 
     print("7b. Step 1 with an explicit --template-start value...")
     dlg = ReviewLauncherDialog()
-    dlg.box_path_edit.setText(r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives")
+    dlg.box_path_edit.setText(DATA_DIR)
+    dlg.box_path_edit.editingFinished.emit()  # as when the RA leaves the field
     dlg.subject_edit.setText("001")
     dlg.local_path_edit.setText(r"C:\Users\hlu\PhysioWorking")
     dlg.step1_radio.setChecked(True)
@@ -155,7 +170,8 @@ def main():
 
     print("7c. A non-numeric template-start is rejected with an error, dialog not accepted...")
     dlg = ReviewLauncherDialog()
-    dlg.box_path_edit.setText(r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives")
+    dlg.box_path_edit.setText(DATA_DIR)
+    dlg.box_path_edit.editingFinished.emit()  # as when the RA leaves the field
     dlg.subject_edit.setText("001")
     dlg.local_path_edit.setText(r"C:\Users\hlu\PhysioWorking")
     dlg.step1_radio.setChecked(True)
@@ -187,7 +203,8 @@ def main():
 
     print("7f. Real mode, Step 2, --ecg-source set to 'batch' -> threaded through as 'batch'...")
     dlg = ReviewLauncherDialog()
-    dlg.box_path_edit.setText(r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives")
+    dlg.box_path_edit.setText(DATA_DIR)
+    dlg.box_path_edit.editingFinished.emit()  # as when the RA leaves the field
     dlg.subject_edit.setText("001")
     dlg.local_path_edit.setText(r"C:\Users\hlu\PhysioWorking")
     dlg.initials_edit.setText("hlu")
@@ -199,7 +216,8 @@ def main():
 
     print("7g. Real mode, Step 1, custom --template-run/--template-window -> threaded through...")
     dlg = ReviewLauncherDialog()
-    dlg.box_path_edit.setText(r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives")
+    dlg.box_path_edit.setText(DATA_DIR)
+    dlg.box_path_edit.editingFinished.emit()  # as when the RA leaves the field
     dlg.subject_edit.setText("001")
     dlg.local_path_edit.setText(r"C:\Users\hlu\PhysioWorking")
     dlg.step1_radio.setChecked(True)
@@ -213,7 +231,8 @@ def main():
 
     print("7h. A non-numeric --template-window is rejected with an error, dialog not accepted...")
     dlg = ReviewLauncherDialog()
-    dlg.box_path_edit.setText(r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives")
+    dlg.box_path_edit.setText(DATA_DIR)
+    dlg.box_path_edit.editingFinished.emit()  # as when the RA leaves the field
     dlg.subject_edit.setText("001")
     dlg.local_path_edit.setText(r"C:\Users\hlu\PhysioWorking")
     dlg.step1_radio.setChecked(True)
@@ -227,7 +246,8 @@ def main():
     print("7i. --no-local-copy: local working folder is no longer required, field disables, "
           "and no_local_copy=True threads through with an empty local_path...")
     dlg = ReviewLauncherDialog()
-    dlg.box_path_edit.setText(r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives")
+    dlg.box_path_edit.setText(DATA_DIR)
+    dlg.box_path_edit.editingFinished.emit()  # as when the RA leaves the field
     dlg.subject_edit.setText("001")
     dlg.initials_edit.setText("hlu")
     dlg.no_local_copy_checkbox.setChecked(True)
@@ -241,7 +261,8 @@ def main():
 
     print("7j. --keep-local threads through as True when checked...")
     dlg = ReviewLauncherDialog()
-    dlg.box_path_edit.setText(r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives")
+    dlg.box_path_edit.setText(DATA_DIR)
+    dlg.box_path_edit.editingFinished.emit()  # as when the RA leaves the field
     dlg.subject_edit.setText("001")
     dlg.local_path_edit.setText(r"C:\Users\hlu\PhysioWorking")
     dlg.initials_edit.setText("hlu")
@@ -267,7 +288,8 @@ def main():
     print("   OK: reconciler initials + compare-initials fields enabled, run/channel enabled")
 
     print("10. Real mode, Step 3, missing a comparison initial -> rejected with an error...")
-    dlg.box_path_edit.setText(r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives")
+    dlg.box_path_edit.setText(DATA_DIR)
+    dlg.box_path_edit.editingFinished.emit()  # as when the RA leaves the field
     dlg.subject_edit.setText("001")
     dlg.local_path_edit.setText(r"C:\Users\hlu\PhysioWorking")
     dlg.initials_edit.setText("hlu")
@@ -287,7 +309,7 @@ def main():
         "ppg_guide": False,
         "practice": False,
         "synthetic": False,
-        "box_path": r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives",
+        "box_path": DATA_DIR,
         "local_path": r"C:\Users\hlu\PhysioWorking",
         "subject": "001",
         "no_local_copy": False,
@@ -304,7 +326,8 @@ def main():
     dlg2 = ReviewLauncherDialog()
     dlg2.step3_radio.setChecked(True)
     dlg2.initials_edit.setText("hlu")
-    dlg2.box_path_edit.setText(r"C:\Users\hlu\Box\DATA\Processed\physioProcessing\derivatives")
+    dlg2.box_path_edit.setText(DATA_DIR)
+    dlg2.box_path_edit.editingFinished.emit()  # as when the RA leaves the field
     dlg2.subject_edit.setText("001")
     dlg2.compare_a_edit.setText("hlu")
     dlg2.compare_b_edit.setText("xyz")
@@ -408,10 +431,12 @@ def main():
         with open(os.path.join(tmp_dir, "processing_log.csv"), "w") as f:
             f.write("Subject,Run,Initials,Step,Notes,Timestamp\nsub-001,1,HLU,ecg reviewed,,1/1/2026 9:00\n"
                     "sub-002,1,sub,ecg reviewed,,1/1/2026 9:00\n")
+        make_data_folder(tmp_dir)
 
         def filled(initials, box=tmp_dir):
             dlg = ReviewLauncherDialog()
             dlg.box_path_edit.setText(box)
+            dlg.box_path_edit.editingFinished.emit()
             dlg.subject_edit.setText("001")
             dlg.local_path_edit.setText(os.path.join(tmp_dir, "work"))
             dlg.step2_radio.setChecked(True)
@@ -442,7 +467,7 @@ def main():
         dlg._on_submit()
         assert dlg.result_values is None and "looks like the start of a subject ID" in asked[-1], asked[-1]
 
-        dlg = filled("jkl", box=os.path.join(tmp_dir, "no_log_here"))  # no log to read: not asked
+        dlg = filled("jkl", box=make_data_folder(os.path.join(tmp_dir, "no_log_here")))  # no log to read: not asked
         dlg._confirm_initials = lambda question: (_ for _ in ()).throw(AssertionError(question))
         dlg._on_submit()
         assert dlg.result_values["initials"] == "jkl"
@@ -462,10 +487,10 @@ def main():
           "the 'practice' folder next to the derivatives folder; switching it off restores the subject...")
     tmp_dir = tempfile.mkdtemp(prefix="simple_gui_practice_")
     try:
-        derivatives = os.path.join(tmp_dir, "derivatives")
-        os.makedirs(derivatives)
+        derivatives = make_data_folder(os.path.join(tmp_dir, "derivatives"))
         dlg = ReviewLauncherDialog()
         dlg.box_path_edit.setText(derivatives)
+        dlg.box_path_edit.editingFinished.emit()
         dlg.subject_edit.setText("012")
         dlg.local_path_edit.setText(os.path.join(tmp_dir, "work"))
         dlg.initials_edit.setText("hlu")
@@ -485,6 +510,7 @@ def main():
         values = dlg.result_values
         assert values["practice"] is True and values["subject"] == "990" and values["stage"] == "2"
         assert os.path.normpath(values["box_path"]) == os.path.join(tmp_dir, "practice"), values["box_path"]
+        assert values["study_profile"] == os.path.join(derivatives, "pebbl_study.toml"), "practice uses the study's"
         assert dlg.box_path_edit.text() == derivatives, "the form (and its remembered path) keeps derivatives"
 
         dlg.practice_checkbox.setChecked(False)
@@ -501,14 +527,16 @@ def main():
         for initials in ("hlu", "abc"):  # known from the real log, or from earlier practice: not asked
             dlg = ReviewLauncherDialog()
             dlg.box_path_edit.setText(derivatives)
+            dlg.box_path_edit.editingFinished.emit()
             dlg.local_path_edit.setText(os.path.join(tmp_dir, "work"))
             dlg.practice_checkbox.setChecked(True)
             dlg.initials_edit.setText(initials)
             dlg._confirm_initials = lambda question: (_ for _ in ()).throw(AssertionError(question))
             dlg._on_submit()
             assert dlg.result_values["initials"] == initials
-        print("   OK: subject 990 locked, Step 3 off, missing practice folder reported, practice folder sent, "
-              "derivatives path kept, subject restored, off with synthetic, initials known from either log")
+        print("   OK: subject 990 locked, Step 3 off, missing practice folder reported, practice folder and the "
+              "study's profile sent, derivatives path kept, subject restored, off with synthetic, initials known "
+              "from either log")
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -518,8 +546,66 @@ def main():
     assert sizes == [32, 64, 128, 256], sizes
     print("   OK: branding/pebbl_icon_*.png at 32, 64, 128 and 256 px")
 
+    print("18. Under the data folder, the form names the folder's study or says why it can't be used, and Start "
+          "refuses an unusable folder (HLU, 2026-11-01)...")
+    tmp_dir = tempfile.mkdtemp(prefix="simple_gui_folders_")
+    try:
+        study = make_data_folder(os.path.join(tmp_dir, "study"))
+        with open(os.path.join(study, "pebbl_study.toml"), "w") as f:
+            f.write('schema_version = 1\nname = "My study"\ntask = "mystudy"\nruns = ["1"]\n')
+        no_profile = os.path.join(tmp_dir, "no_profile")
+        os.makedirs(os.path.join(no_profile, "sub-001"))
+        not_data = os.path.join(tmp_dir, "not_data")
+        os.makedirs(not_data)
+        empty_study = os.path.join(tmp_dir, "empty_study")
+        os.makedirs(empty_study)
+        testdata.sdi_profile(empty_study)
+        broken = make_data_folder(os.path.join(tmp_dir, "broken"))
+        with open(os.path.join(broken, "pebbl_study.toml"), "a") as f:
+            f.write("taks = 1\n")
+        cases = [  # (folder, words the line must contain, a problem?)
+            ("", "", False),
+            (study, "Study: My study", False),
+            (DATA_DIR, "Study: sdi", False),
+            (os.path.join(tmp_dir, "nowhere"), "Can't find this folder", True),
+            (no_profile, "no study settings file (pebbl_study.toml)", True),
+            (not_data, "isn't a data folder", True),
+            (empty_study, "Study: sdi. There are no participant folders", True),
+            (broken, "doesn't know: taks", True),
+        ]
+        for folder, words, problem in cases:
+            text, is_problem, profile = simple_gui.folder_status(folder)
+            assert words in text and is_problem == problem and (profile is None) == (not text.startswith("Study:")), \
+                (folder, text, is_problem)
+            dlg = ReviewLauncherDialog()
+            dlg.box_path_edit.setText(folder)
+            dlg.subject_edit.setText("001")
+            dlg.local_path_edit.setText(os.path.join(tmp_dir, "work"))
+            dlg.initials_edit.setText("hlu")
+            dlg._confirm_initials = lambda question: True
+            dlg._apply_study_profile()
+            assert dlg.study_label.text() == text
+            dlg._on_submit()
+            if folder and problem:
+                assert dlg.result_values is None and dlg.error_label.text() == text, (folder, dlg.error_label.text())
+            elif folder:
+                assert dlg.result_values and dlg.result_values["box_path"] == folder, (folder, dlg.error_label.text())
+        dlg = ReviewLauncherDialog()
+        dlg.box_path_edit.setText(study)
+        dlg._apply_study_profile()
+        assert [dlg.run_combo.itemText(i) for i in range(dlg.run_combo.count())] == ["1"], "the study's runs"
+        dlg.synthetic_checkbox.setChecked(True)
+        assert not dlg.study_label.isEnabled(), "greyed out with synthetic data"
+        print("   OK: study named; a missing, wrong, profile-less, empty or broken folder is explained and refused "
+              "at Start; the form follows the study's runs")
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
     print("\nALL SIMPLE_GUI LOGIC TESTS PASSED.")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    finally:
+        shutil.rmtree(DATA_DIR, ignore_errors=True)

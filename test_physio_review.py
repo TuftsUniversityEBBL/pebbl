@@ -36,6 +36,7 @@ import practice_certification
 import practice_report_gui
 import qrs_template
 import session_log
+import testdata
 from physio_io import build_run_path, generate_synthetic_demo
 
 import session_summary_gui  # noqa: E402
@@ -217,6 +218,7 @@ def main():
                   "'<channels> reviewed -- <status>' entry, each with the RA's comment (typed in the "
                   "template-preview / session-summary dialogs, no longer a terminal prompt) as Notes...")
             box_path = tempfile.mkdtemp(prefix="physio_review_log_", dir=tmp_dir)
+            testdata.sdi_profile(box_path)  # real data need a study profile (2026-11-01)
             make_fake_real_subject(box_path, "042", "1", duration_sec=30)
             make_fake_real_subject(box_path, "042", "2", duration_sec=30)
 
@@ -255,6 +257,7 @@ def main():
                   "column for any SEGMENT-mode channel actually reviewed (eda here), with the RA's "
                   "comment alone in Notes...")
             box_path_2b = tempfile.mkdtemp(prefix="physio_review_log2_", dir=tmp_dir)
+            testdata.sdi_profile(box_path_2b)  # real data need a study profile (2026-11-01)
             make_fake_real_subject(box_path_2b, "043", "1", duration_sec=30)
             snapshot_dir_2b = tempfile.mkdtemp(prefix="physio_review_snapshot2_", dir=tmp_dir)
             with patch.object(processing_log, "LOCAL_SNAPSHOT_DIR", snapshot_dir_2b), \
@@ -330,6 +333,7 @@ def main():
                   "subject down, the session works against that LOCAL copy, and on success the new "
                   "output is pushed back to --box-path and the local copy is cleaned up by default...")
             box_path_2 = tempfile.mkdtemp(prefix="physio_review_boxsync_box_", dir=tmp_dir)
+            testdata.sdi_profile(box_path_2)  # real data need a study profile (2026-11-01)
             local_path_2 = tempfile.mkdtemp(prefix="physio_review_boxsync_local_", dir=tmp_dir)
             make_fake_real_subject(box_path_2, "777", "1", duration_sec=30)
 
@@ -355,6 +359,7 @@ def main():
 
             print("13. --keep-local preserves the local copy even after a fully successful push...")
             box_path_3 = tempfile.mkdtemp(prefix="physio_review_boxsync_box2_", dir=tmp_dir)
+            testdata.sdi_profile(box_path_3)  # real data need a study profile (2026-11-01)
             local_path_3 = tempfile.mkdtemp(prefix="physio_review_boxsync_local2_", dir=tmp_dir)
             make_fake_real_subject(box_path_3, "778", "1", duration_sec=30)
 
@@ -374,6 +379,7 @@ def main():
             print("14. A failed push confirmation preserves the ENTIRE local copy and warns clearly "
                   "-- nothing is deleted when Box can't be confirmed to have the new file...")
             box_path_4 = tempfile.mkdtemp(prefix="physio_review_boxsync_box3_", dir=tmp_dir)
+            testdata.sdi_profile(box_path_4)  # real data need a study profile (2026-11-01)
             local_path_4 = tempfile.mkdtemp(prefix="physio_review_boxsync_local3_", dir=tmp_dir)
             make_fake_real_subject(box_path_4, "779", "1", duration_sec=30)
 
@@ -489,7 +495,7 @@ def main():
             key = practice_certification.load_key(practice_certification.key_path_for(practice_root))
             snapshot_dir = tempfile.mkdtemp(prefix="physio_review_snapshot_", dir=tmp_dir)
             practice = ["--box-path", practice_root, "--subject", "990", "--initials", "xyz", "--no-local-copy",
-                        "--practice"]
+                        "--practice", "--study-profile", testdata.sdi_profile(tmp_dir)]
             reports, comparisons = [], []
 
             def fake_report(heading, lines, passed):

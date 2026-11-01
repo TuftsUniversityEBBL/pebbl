@@ -378,8 +378,9 @@ def main(argv=None):
                         help="How far (seconds) the ECG lag search looks each way (default: 2).")
     parser.add_argument("--report", default=None, help="Optional CSV report path.")
     parser.add_argument("--study-profile", default=None,
-                        help=f"The study profile (TOML) to use instead of --old-root's {study_profile.PROFILE_FILE}, "
-                             f"if any: it sets the recordings' task label (see study_profile.py).")
+                        help=f"The study profile (TOML) to use instead of --old-root's {study_profile.PROFILE_FILE} "
+                             f"(one or the other is required): it sets the recordings' task label (see "
+                             f"study_profile.py).")
     args = parser.parse_args(argv)
 
     # A mistyped folder must not read as "nothing to check" (HLU, 2026-09-27:
@@ -388,7 +389,7 @@ def main(argv=None):
         if not os.path.isdir(path):
             raise SystemExit(f"{flag} folder not found: {path}\nCheck the path (for example the user name in "
                              f"C:\\Users\\<name>\\Box\\...). Nothing was checked.")
-    # The study's task label (task-sdi built in) names the files compared.
+    # The study's task label, from its profile (required, HLU 2026-11-01), names the files compared.
     profile = study_profile.load(args.old_root, args.study_profile)
     study_profile.activate(profile)
     if not profile.built_in:

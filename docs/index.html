@@ -187,12 +187,8 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--rule);color:v
 </li>
 <li>
   <h3>Get access to the data</h3>
-  <p>PEBBL reviews recordings kept in a <strong>data folder</strong>: any folder on your computer, a network drive or a cloud drive, organized as in <a href="#layout">section 10</a>. In our lab it's on Box. If the computer doesn't have Box Drive yet, install it from <a href="https://www.box.com/resources/downloads">box.com/resources/downloads</a> and sign in with your Tufts account. Then check that you can open the lab's physio folder:</p>
-  <ul class="paths">
-    <li><strong>Windows:</strong> <span class="path">C:\Users\YOU\Box\DATA\Processed\physioProcessing\derivatives</span></li>
-    <li><strong>Mac:</strong> Finder sidebar → <strong>Box</strong> → <span class="path">DATA/Processed/physioProcessing/derivatives</span></li>
-  </ul>
-  <p>If you can't see the <span class="path">DATA</span> folder, ask the lab staff for access. For another study, the people running it will tell you where its data folder is.</p>
+  <p>PEBBL reviews recordings kept in your study's <strong>data folder</strong>, organized as in <a href="#layout">section 10</a>. Each study has its own. In our lab, data folders are on Box. If the computer doesn't have Box Drive yet, install it from <a href="https://www.box.com/resources/downloads">box.com/resources/downloads</a> and sign in with your Tufts account.</p>
+  <p>The lab staff tell you where your study's data folder is. Check that you can open it: it holds one folder per participant (<span class="path">sub-001</span>, <span class="path">sub-002</span>, …) and the study's settings file, <span class="path">pebbl_study.toml</span>. If you can't open it, ask the lab staff for access.</p>
 </li>
 <li>
   <h3>Download PEBBL</h3>
@@ -283,12 +279,12 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 
 <h3>Fill in the form</h3>
 <figure class="small">
-  <img src="img/form.png" alt="PEBBL's form with Step 2 selected, a data folder on Box, subject 001, run 1, channel ECG and initials abc." width="640" height="569">
+  <img src="img/form.png" alt="PEBBL's form with Step 2 selected, a study's data folder on Box with the line Study: mystudy under it, subject 001, run 1, channel ECG and initials abc." width="640" height="591">
   <figcaption>The form, ready for an ECG review of participant 001, run 1.</figcaption>
 </figure>
 <ul>
   <li><strong>Step:</strong> usually <em>Step 2: Review a channel</em>.</li>
-  <li><strong>Data folder:</strong> click <strong>Browse</strong> and choose the folder that holds the participant folders (<span class="path">sub-001</span>, <span class="path">sub-002</span>, …). In our lab, that's the Box <span class="path">derivatives</span> folder from setup step 3. PEBBL remembers it.</li>
+  <li><strong>Data folder:</strong> click <strong>Browse</strong> and choose your study's data folder from setup step 3, the one that holds the participant folders (<span class="path">sub-001</span>, <span class="path">sub-002</span>, …). Underneath, PEBBL shows the study it belongs to. If that isn't your study, or it says something is missing, choose again; if it's the right folder, ask the lab staff. PEBBL remembers the folder.</li>
   <li><strong>Subject</strong>, <strong>Run</strong> and <strong>Channel to review:</strong> from your assignment. <span class="path">1</span>, <span class="path">001</span> and <span class="path">sub-001</span> all work as the subject.</li>
   <li><strong>Local working folder:</strong> your <span class="path">PhysioWorking</span> folder.</li>
   <li><strong>Your initials.</strong></li>
@@ -481,14 +477,16 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
   <li><strong>Closed a window by accident?</strong> Your last save is safe; unsaved changes are lost. Start again and PEBBL resumes from your last save.</li>
   <li><strong>PEBBL says files from an earlier session were never copied back to the data folder:</strong> answer <code>y</code> to copy them there.</li>
   <li><strong>A message says <span class="path">processing_log.csv</span> is open:</strong> close it in Excel. Your marks are already saved.</li>
+  <li><strong>The form says the data folder has no study settings file, or isn't a data folder:</strong> choose your study's data folder (setup step 3). If it's the right folder, ask the lab staff.</li>
 </ul>
 </section>
 
 <section id="layout">
 <h2>10. How the data folder is organized</h2>
-<p>In our lab, the processing pipeline already lays out the Box folder this way, so RAs can skip this section. It's for lab staff, and for anyone setting up PEBBL for another study.</p>
-<p>The data folder holds one folder per participant. Each run of a recording sits in its own folder, with a JSON file of the same name beside it:</p>
+<p>In our lab, each study's processing pipeline already lays out its data folder this way, so RAs can skip this section. It's for lab staff, and for anyone setting up PEBBL for a study.</p>
+<p>The data folder holds the study's settings file and one folder per participant. Each run of a recording sits in its own folder, with a JSON file of the same name beside it:</p>
 <pre>data folder/
+  pebbl_study.toml
   sub-001/
     ses-run1/
       beh/
@@ -501,9 +499,10 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
   sub-002/
     …</pre>
 <ul>
+  <li><strong>The study's settings:</strong> <span class="path">pebbl_study.toml</span>, a short text file the lab staff write for each study: its name, its task name, and anything it does differently, such as which runs and channels it has. PEBBL won't review a data folder without one, and it records the study's name in every review. The developer README says how to write one.</li>
   <li><strong>Participants:</strong> <span class="path">sub-</span> plus the ID. IDs shorter than three characters get leading zeros, so participant 1 is <span class="path">sub-001</span>.</li>
   <li><strong>Runs:</strong> <span class="path">ses-run1</span> and, if there is one, <span class="path">ses-run2</span>. A study with one recording per participant only needs <span class="path">ses-run1</span>.</li>
-  <li><strong>File names:</strong> <span class="path">sub-ID_ses-runN_task-NAME_physio.tsv.gz</span>, where <span class="path">NAME</span> is the study's task name (ours is <span class="path">sdi</span>). Keep only one recording per run folder.</li>
+  <li><strong>File names:</strong> <span class="path">sub-ID_ses-runN_task-NAME_physio.tsv.gz</span>, where <span class="path">NAME</span> is the study's task name, as in its settings file (for example <span class="path">sdi</span>). Keep only one recording per run folder.</li>
   <li><strong>The recording</strong> is a tab-separated table, compressed with gzip, with one row per sample and no header row.</li>
   <li><strong>The JSON file</strong> gives the <code>SamplingFrequency</code> in Hz and the <code>Columns</code>, in order. PEBBL uses columns named <code>ecg</code>, <code>ppg</code>, <code>rsp</code>, <code>eda</code>, <code>sbp</code>, <code>dbp</code> and <code>event</code>. It also uses <code>ecg_peaks</code> and <code>ppg_peaks</code>: 1 where the computer marked a peak, 0 elsewhere. A recording can have only some of these columns.</li>
 </ul>
