@@ -1,10 +1,13 @@
 """
 Capture PEBBL screens from SYNTHETIC data for the RA manual (offscreen; no windows appear).
 
-Writes docs/img/form.png, ecg_viewer.png, eda_viewer.png, summary.png and practice_report.png, for
-developers updating the manual. Run from the tool folder, with Windows fonts for Qt:
+Writes docs/img/form.png, ecg_viewer.png, eda_viewer.png, rsp_hold.png, rsp_clip.png, summary.png and
+practice_report.png, for developers updating the manual. Run from the tool folder, with Windows fonts for Qt:
 
-    QT_QPA_FONTDIR=C:/Windows/Fonts annotate_env/Scripts/python.exe docs/capture_manual_shots.py [form ecg eda summary report]
+    QT_QPA_FONTDIR=C:/Windows/Fonts annotate_env/Scripts/python.exe docs/capture_manual_shots.py [form ecg eda rsp summary report]
+
+The RSP pictures show the RSP rule (HLU, 2026-10-05) on synthetic breathing, at times unlike the practice
+recordings': a held breath and clipped tops are bad; a sigh and shallow breathing are real.
 
 Then rebuild the PDF and the web page (docs/build_manual_pdf.py) and commit docs/.
 """
@@ -36,8 +39,9 @@ from channel_config import CHANNELS  # noqa: E402
 from physio_io import generate_synthetic_demo  # noqa: E402
 from simple_gui import ReviewLauncherDialog  # noqa: E402
 
-which = sys.argv[1:] or ["form", "ecg", "eda", "summary", "report"]
+which = sys.argv[1:] or ["form", "ecg", "eda", "rsp", "summary", "report"]
 ORIG_PLOT = mne.io.RawArray.plot
+RSP_BAD = {}  # (onset, duration) in seconds of each RSP picture's bad_rsp stretch, set by its edit
 
 
 def pump(n=5):
@@ -108,6 +112,70 @@ def mark_bad_eda(raw):
     raw.annotations.append(23.8, 1.8, "bad_eda")
 
 
+def breaths(rsp, sfreq):
+    """The breath tops and troughs (samples), and a typical breath's depth."""
+    import neurokit2 as nk
+    _, info = nk.rsp_peaks(rsp, sampling_rate=sfreq)
+    tops = np.asarray([int(x) for x in info["RSP_Peaks"] if x == x])
+    troughs = np.asarray([int(x) for x in info["RSP_Troughs"] if x == x])
+    return tops, troughs, float(np.median(rsp[tops]) - np.median(rsp[troughs]))
+
+
+def taper(length, sfreq, ease_sec=1.5):
+    """0 at both ends rising to 1 over ease_sec, for changes that ease in and out."""
+    out = np.ones(length)
+    edge = min(int(ease_sec * sfreq), length // 3)
+    out[:edge] = 0.5 - 0.5 * np.cos(np.linspace(0, np.pi, edge))
+    out[length - edge:] = out[:edge][::-1]
+    return out
+
+
+def rsp_hold_and_sigh(df, sfreq):
+    # A sigh (one whole breath, 1.6 times as deep; the demo's EDA rises about 3 s after its top), then a
+    # held breath after breathing in: flat for 6.5 s but for a small heartbeat ripple.
+    rsp = df["rsp"].to_numpy(dtype=float).copy()
+    tops, troughs, depth = breaths(rsp, sfreq)
+    gaps = np.diff(troughs) / sfreq
+    whole = np.flatnonzero((gaps >= 2.5) & (gaps <= 8.0))
+    j = int(whole[np.argmin(np.abs(troughs[whole] / sfreq - 26.5))])
+    a, b = troughs[j], troughs[j + 1]
+    line = np.linspace(rsp[a], rsp[b], b - a)
+    rsp[a:b] = line + (rsp[a:b] - line) * 1.6
+    later = tops[tops > b + int(1.0 * sfreq)]
+    h0 = int(later[np.argmin(np.abs(later / sfreq - 33.0))])
+    h1 = h0 + int(6.5 * sfreq)
+    hold = rsp[h0] + 0.02 * depth * np.sin(2 * np.pi * 1.2 * np.arange(h1 - h0) / sfreq)
+    ramp = np.linspace(0, 1, int(0.5 * sfreq))
+    rsp[h0:h1] = hold
+    rsp[h1:h1 + len(ramp)] = hold[-1] * (1 - ramp) + rsp[h1:h1 + len(ramp)] * ramp
+    RSP_BAD["hold"] = (h0 / sfreq, (h1 - h0) / sfreq)
+    df["rsp"] = rsp
+
+
+def rsp_clip_and_shallow(df, sfreq):
+    # Two deep breaths cut flat at the belt's maximum (just above the run's highest top), from the trough
+    # before the first cut top to the trough after the last; then shallow breathing at half depth.
+    rsp = df["rsp"].to_numpy(dtype=float).copy()
+    tops, troughs, depth = breaths(rsp, sfreq)
+    c0, c1 = int(69.0 * sfreq), int(77.5 * sfreq)
+    ceiling = float(max(rsp[:c0].max(), rsp[c1:].max())) + 0.03 * depth
+    base = float(np.percentile(rsp[c0:c1], 5))
+    gain = max(1.6, 1.25 * (ceiling - base) / max(float(np.percentile(rsp[c0:c1], 95)) - base, 1e-9))
+    rsp[c0:c1] = np.minimum(base + (rsp[c0:c1] - base) * (1 + (gain - 1) * taper(c1 - c0, sfreq)), ceiling)
+    cut = c0 + np.flatnonzero(rsp[c0:c1] >= ceiling)
+    k0 = int(troughs[troughs <= cut[0]][-1])
+    k1 = int(troughs[troughs >= cut[-1]][0])
+    RSP_BAD["clip"] = (k0 / sfreq, (k1 - k0) / sfreq)
+    s0, s1 = int(78.5 * sfreq), int(89.0 * sfreq)
+    mean = float(np.mean(rsp[s0:s1]))
+    rsp[s0:s1] = mean + (rsp[s0:s1] - mean) * (1 - 0.5 * taper(s1 - s0, sfreq))
+    df["rsp"] = rsp
+
+
+def mark_bad_rsp(key):
+    return lambda raw: raw.annotations.append(*RSP_BAD[key], "bad_rsp")
+
+
 def shot_summary():
     dlg = session_summary_gui.SessionSummaryDialog(
         "sub-001_ses-run1_task-sdi · ECG · abc",
@@ -158,6 +226,9 @@ if "ecg" in which:
     viewer_shot("ecg_viewer.png", ["ecg"], 20)
 if "eda" in which:
     viewer_shot("eda_viewer.png", ["eda"], 20, before=mark_bad_eda, edit_df=eda_artifact)
+if "rsp" in which:
+    viewer_shot("rsp_hold.png", ["rsp"], 20, before=mark_bad_rsp("hold"), edit_df=rsp_hold_and_sigh)
+    viewer_shot("rsp_clip.png", ["rsp"], 68, before=mark_bad_rsp("clip"), edit_df=rsp_clip_and_shallow)
 if "summary" in which:
     shot_summary()
 print("saved:", sorted(os.listdir(OUT)))

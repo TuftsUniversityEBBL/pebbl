@@ -385,6 +385,14 @@ git clone https://github.com/tufts-ebbl/pebbl.git</pre>
 </div>
 <p>The review starts with the computer's flags; check each one. The EDA guide row underneath helps: a rise in EDA 1 to 3 seconds after a big breath shows the breath was real. Never mark RSP bad because of EDA.</p>
 </div>
+<figure>
+  <img src="img/rsp_hold.png" alt="An RSP review: a deep breath near 27 s is left unmarked, and the EDA guide row rises about 3 seconds after its top. A shaded bad_rsp stretch from about 31 to 38 s covers a flat line where a breath was held." width="1280" height="720">
+  <figcaption>A held breath, marked <span class="label">bad_rsp</span>: the line goes flat, so there are no breath peaks to see. The deep breath before it is a sigh. It's real, so it stays unmarked, and the EDA rise after it confirms it.</figcaption>
+</figure>
+<figure>
+  <img src="img/rsp_clip.png" alt="An RSP review: a shaded bad_rsp stretch from about 68.5 to 76 s covers two breaths whose tops are cut flat at the same height. After it, one normal breath and then smaller breaths with rounded tops are left unmarked." width="1280" height="720">
+  <figcaption>Clipped tops, marked <span class="label">bad_rsp</span>: two deep breaths cut flat at the top of the recording's range. The shallow breaths after them still show their peaks, so they stay unmarked.</figcaption>
+</figure>
 
 <div class="chan">
 <h3>EDA <span class="what">Bad stretches only</span></h3>
