@@ -512,6 +512,12 @@ def main():
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
+    print("17. The form shows the PEBBL hex in its title bar and taskbar (HLU signed off the logo 2026-10-31)...")
+    dlg = ReviewLauncherDialog()
+    sizes = sorted(s.width() for s in dlg.windowIcon().availableSizes())
+    assert sizes == [32, 64, 128, 256], sizes
+    print("   OK: branding/pebbl_icon_*.png at 32, 64, 128 and 256 px")
+
     print("\nALL SIMPLE_GUI LOGIC TESTS PASSED.")
 
 

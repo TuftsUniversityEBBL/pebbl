@@ -16,6 +16,7 @@ import os
 import re
 
 from PyQt6.QtCore import QSettings
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -58,12 +59,25 @@ from processing_log import initials_confirmation_text, known_initials
 
 # Same rule as physio_review.normalize_initials() (audit finding H6).
 INITIALS_PATTERN = re.compile(r"^[a-z]{2,4}$")
+# The PEBBL hex for the title bar and taskbar, at the sizes they use (branding/make_static_logo.py;
+# HLU signed off the logo 2026-10-31).
+ICON_FILES = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "branding", f"pebbl_icon_{size}.png")
+              for size in (32, 64, 128, 256)]
+
+
+def pebbl_icon():
+    icon = QIcon()
+    for path in ICON_FILES:
+        if os.path.exists(path):
+            icon.addFile(path)
+    return icon
 
 
 class ReviewLauncherDialog(QDialog):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Physiology in the EBBL (PEBBL)")
+        self.setWindowIcon(pebbl_icon())
         self.setMinimumWidth(640)  # wide enough that no label or option is cut off (2026-10-04)
         self.result_values = None
 
