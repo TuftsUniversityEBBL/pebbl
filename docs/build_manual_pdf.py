@@ -5,14 +5,16 @@ Build PEBBL_User_Manual.pdf from PEBBL_User_Manual.html (the web-page manual).
 The HTML is written as page content only (the web version adds the document
 skeleton when it's published), so this wraps it in a full document, then
 prints it with Microsoft Edge or Google Chrome in headless mode. The typefaces
-come from Google Fonts and the logo is drawn by a script, so the browser is
-given time to load and draw before printing (needs an internet connection).
+come from Google Fonts, so the browser is given time to load them before
+printing (needs an internet connection).
 
 Run from anywhere:  annotate_env\\Scripts\\python.exe docs\\build_manual_pdf.py
 Optional:  --png  also saves a full-page PNG preview next to the PDF.
            --pages-only  writes only index.html (below); no browser needed.
-Also renders the logo icon to img/pebbl_icon.png (transparent background) for
-the public repository's front page, from branding/pebbl_core.js, and writes
+Also copies the static logo, branding/pebbl_icon.svg (made by
+branding/make_static_logo.py; HLU signed it off 2026-10-31), to
+img/pebbl_logo.svg for the manual's cover, renders it to img/pebbl_icon.png
+(transparent background) for the public repository's front page, and writes
 index.html: the manual as a standalone web page with a link to the PDF, which
 GitHub Pages serves from this docs folder at https://tufts-ebbl.github.io/pebbl/
 (Settings > Pages > Deploy from branch: main, /docs; the empty .nojekyll file
@@ -56,24 +58,24 @@ ICON_PNG = os.path.join(HERE, "img", "pebbl_icon.png")
 # The Windows icon for desktop shortcuts to "Start PEBBL.bat" (HLU, 2026-10-05), in PEBBL's main folder.
 ICON_ICO = os.path.join(os.path.dirname(HERE), "pebbl.ico")
 ICO_SIZES = [(s, s) for s in (16, 24, 32, 48, 64, 128, 256)]
-CORE_JS = os.path.join(os.path.dirname(HERE), "branding", "pebbl_core.js")
-ICON_PAGE = ("<!doctype html><html><head><meta charset='utf-8'>"
-             "<link rel='stylesheet' href='https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@700&display=swap'>"
-             "<style>html,body{margin:0;background:transparent}#i{width:480px;margin:40px}</style></head><body><div id='i'></div>"
-             "<script>%s</script><script>var I={W:1732,H:2000,border:95,bleed:0,seed:61,tries:3500,minR:80,maxR:190,"
-             "line:12,tw:100,halo:190,gap:40,fs:500,textTop:250,dipBelowTop:40,tipDrop:210};"
-             "document.fonts.load(\"700 500px 'Source Sans 3'\").then(function(){PEBBL(document.getElementById('i'),I);});"
-             "</script></body></html>")
+LOGO_SVG = os.path.join(os.path.dirname(HERE), "branding", "pebbl_icon.svg")
+MANUAL_LOGO = os.path.join(HERE, "img", "pebbl_logo.svg")  # GitHub Pages serves docs/ only, so the cover needs a copy
+ICON_PAGE = ("<!doctype html><html><head><meta charset='utf-8'><style>html,body{margin:0;background:transparent}"
+             "#i{display:block;width:480px;margin:40px}</style></head><body><img id='i' src='img/pebbl_logo.svg'>"
+             "</body></html>")
+
+
+def copy_logo():
+    shutil.copyfile(LOGO_SVG, MANUAL_LOGO)
+    print("wrote", MANUAL_LOGO)
 
 
 def render_icon(common):
-    with open(CORE_JS, encoding="utf-8") as f:
-        page = ICON_PAGE % f.read()
     fd, temp_html = tempfile.mkstemp(suffix=".html", dir=HERE)
     os.close(fd)
     try:
         with open(temp_html, "w", encoding="utf-8") as f:
-            f.write(page)
+            f.write(ICON_PAGE)
         subprocess.run(common + ["--window-size=640,720", "--hide-scrollbars", "--default-background-color=00000000",
                                  f"--screenshot={ICON_PNG}", "file:///" + temp_html.replace("\\", "/")],
                        check=True, capture_output=True, timeout=180)
@@ -126,6 +128,7 @@ def write_pages_index():
 
 
 def main():
+    copy_logo()
     write_pages_index()
     if "--pages-only" in sys.argv:
         return

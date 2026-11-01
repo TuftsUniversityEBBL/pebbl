@@ -8,7 +8,9 @@ docs/PEBBL_User_Manual.html:
     committed file (line endings aside, since git may check it out as CRLF);
   - a changed source gives a different page (negative control);
   - the page links the PDF and the favicon, and those files and docs/.nojekyll
-    exist.
+    exist;
+  - the logo comes from its static files (branding/make_static_logo.py), whose
+    lettering is outlines, and the manual's copy matches branding/pebbl_icon.svg.
 
 If this fails after editing the manual, run
     annotate_env/Scripts/python.exe docs/build_manual_pdf.py --pages-only
@@ -57,6 +59,17 @@ def main():
     assert '<link rel="icon" type="image/png" href="img/pebbl_icon.png">' in committed
     for name in ("PEBBL_User_Manual.pdf", os.path.join("img", "pebbl_icon.png"), ".nojekyll"):
         assert os.path.exists(os.path.join(DOCS, name)), name
+    print("   OK")
+
+    print("4. The logo (HLU signed it off 2026-10-31) comes from its static files, lettering as outlines...")
+    for name in ("pebbl_icon.svg", "pebbl_sticker.svg", "pebbl_sticker_print.svg", "pebbl_sticker_proof.svg"):
+        with open(os.path.join(HERE, "branding", name), encoding="utf-8") as f:
+            svg = f.read()
+        assert "<text" not in svg and 'aria-label="pebbl"' in svg, name
+    with open(build_manual_pdf.LOGO_SVG, "rb") as a, open(build_manual_pdf.MANUAL_LOGO, "rb") as b:
+        assert a.read() == b.read(), "docs/img/pebbl_logo.svg isn't branding/pebbl_icon.svg: run docs/build_manual_pdf.py"
+    assert '<img class="logo" src="img/pebbl_logo.svg"' in committed and "<script" not in committed, \
+        "the manual's cover shows the static logo, not its own copy of the generator"
     print("   OK")
 
     print("\nALL DOCS TESTS PASSED.")

@@ -95,13 +95,24 @@ never belong here; `.gitignore` excludes the data file patterns.
 
 **The user manual.** Its source is `docs/PEBBL_User_Manual.html`.
 `docs/build_manual_pdf.py` rebuilds the PDF, the logo PNG and `pebbl.ico`
-with Edge or Chrome, and writes `docs/index.html`: the manual as a
+(from `branding/pebbl_icon.svg`, copied to `docs/img/pebbl_logo.svg` for the
+cover) with Edge or Chrome, and writes `docs/index.html`: the manual as a
 standalone web page, with a link to the PDF, which GitHub Pages serves from
 `docs/` at https://tufts-ebbl.github.io/pebbl/ (GitHub's own file view
 doesn't preview the PDF; `docs/.nojekyll` makes Pages serve the folder as
 plain files). `--pages-only` writes just `index.html`, and `test_docs.py`
 fails if it is out of date. The screenshots in `docs/img/` are captured
 from synthetic data by `docs/capture_manual_shots.py`.
+
+**The logo** (HLU signed off version 7 on 2026-10-31). `branding/pebbl_core.js`
+draws it and `branding/preview.html` previews it. `branding/make_static_logo.py`
+makes the static files from it, with the lettering converted to outlines:
+the print sticker (`pebbl_sticker_print.svg`/`.pdf`, a 600-dpi PNG, and a
+proof with the cut, safe-zone and bleed guides), `pebbl_sticker.svg`, and
+`pebbl_icon.svg` with PNGs at 32 to 256 px (the launcher form's window icon).
+It needs Edge or Chrome, the internet and Source Sans 3's font file, which
+isn't kept here; its docstring says where to get it. Rerun it, then
+`docs/build_manual_pdf.py`, only if the design changes.
 
 **Lab computers: `setup_lab_computer.sh`** (HLU, 2026-10-06). One shared
 install per Windows computer, in `C:\Users\Public\Downloads\pebbl`. Run it in
@@ -1702,8 +1713,10 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   and Mac (see "Setup").
 - `setup_lab_computer.sh` — the shared install on a lab computer (see
   "Setup").
+- `branding/` — the logo: its generator and preview, `make_static_logo.py`,
+  and the static print and icon files it makes (see "The logo").
 - `docs/` — the user manual (`PEBBL_User_Manual.html`, its PDF and web page
-  `index.html`, screenshots in `img/`), `build_manual_pdf.py`,
+  `index.html`, screenshots and the cover logo in `img/`), `build_manual_pdf.py`,
   `capture_manual_shots.py`, and `FORMATS.md`, the files PEBBL reads and
   writes.
 
