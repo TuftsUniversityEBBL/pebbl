@@ -43,6 +43,7 @@ import processing_log
 import qrs_template
 import qrs_template_stage
 import session_summary_gui
+import testdata
 from annotation_io import compute_event_transitions, resolve_ecg_peaks, write_json_atomic
 from physio_io import build_run_path, generate_synthetic_demo, load_physio_tsv, read_sidecar
 
@@ -156,7 +157,8 @@ def main():
         snapshot = os.path.join(tmp, "snapshot")
         os.makedirs(snapshot)
         with patch.object(sys, "argv", ["physio_review.py", "--practice", "--box-path", practice, "--subject", "990",
-                                        "--run", "1", "--initials", "zz", "--channels", "ecg", "--no-local-copy"]), \
+                                        "--run", "1", "--initials", "zz", "--channels", "ecg", "--no-local-copy",
+                                        "--study-profile", testdata.sdi_profile(tmp)]), \
              patch.object(physio_review, "append_processing_log_entry", record), \
              patch.object(processing_log, "LOCAL_SNAPSHOT_DIR", snapshot), \
              patch.object(mne.io.RawArray, "plot", return_value=None), \

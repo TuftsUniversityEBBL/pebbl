@@ -87,7 +87,7 @@ Built by `physio_io.find_run_path` from the data folder, subject and run:
 - The subject is zero-padded to three digits (`1` becomes `001`); runs are
   `1` and `2`.
 - The task label (`sdi` above) is the study profile's `task` (section 10;
-  `sdi` with the built-in settings). If that file isn't there, PEBBL uses the
+  `sdi` for synthetic demo data). If that file isn't there, PEBBL uses the
   one `sub-<SSS>_ses-run<R>_task-*_physio.tsv.gz` in that folder; with more
   than one it stops and lists them.
 - **Outputs** go next to the recording (or to `--out-dir`), named from its
@@ -140,7 +140,7 @@ ASCII (non-ASCII characters are escaped, e.g. `µS`).
 | `source_file` | the recording's stem (`physio_review.py`), or its full path (`physio_annotate.py`) |
 | `sampling_rate` | the sidecar's `SamplingFrequency` |
 | `channels` | one entry per channel, below |
-| `study_profile` | only when a study profile file was used (section 10): `{name, sha256}`, the profile's name and the SHA-256 of its file |
+| `study_profile` | the study profile used (section 10): `{name, sha256}`, the profile's name and the SHA-256 of its file. Absent from synthetic demo reviews, and from real reviews saved before profiles were required (2026-11-01) without one |
 
 **Per channel**
 
@@ -285,11 +285,13 @@ Written by `processing_log.append_processing_log_entry` in the data folder
 
 ## 10. Study profiles, `pebbl_study.toml`
 
-Read by `study_profile.load`. PEBBL's built-in settings are those of the
-study it was first built for (task `sdi`); with no profile file, nothing
-about a session changes. Another study's settings are a small TOML file that
-lab staff put in that study's data folder, next to `processing_log.csv`
-(or name with `physio_review.py --study-profile <file>`):
+Read by `study_profile.load`. Every study's settings are a small TOML file
+that lab staff put in that study's data folder, next to `processing_log.csv`
+(or name with `physio_review.py --study-profile <file>`). **A review of real
+data needs one** (HLU, 2026-11-01): a data folder without it stops the
+session with a plain message, as does practice or `--input-run1` without
+`--study-profile`. Only synthetic demo data use PEBBL's built-in settings,
+those of the study it was first built for (task `sdi`). The minimal file:
 
 ```toml
 schema_version = 1
@@ -297,7 +299,7 @@ name = "My study"   # shown at the start of a session; recorded in saved files
 task = "mystudy"    # the recordings' task label (letters and digits)
 ```
 
-Optional settings (the built-in value in brackets):
+Optional settings (the default, PEBBL's built-in value, in brackets):
 
 | Setting | Effect |
 |---|---|
@@ -320,11 +322,16 @@ Step 3 warns when a reviewer's setting differs from the reconciler's.
 - PEBBL refuses a profile with an unknown setting, a wrong value, or text it
   can't read, with a plain message: a misspelled setting is never silently
   ignored.
-- With a profile file, a recording whose task label isn't the profile's
-  `task` stops the session before anything is saved. With the built-in
-  settings, a task label other than `sdi` only prints a note.
-- With a profile file, the session log's header names it, and saved review
-  files record it (`study_profile`, sections 5 and 6).
+- A recording whose task label isn't the profile's `task` stops the session
+  before anything is saved.
+- The session log's header names the profile, and saved review files record
+  it (`study_profile`, sections 5 and 6).
+- The form shows the study's name under the data folder, or why the folder
+  can't be used (no profile, no `sub-*` folders, or a profile PEBBL refuses),
+  and won't start a session on such a folder.
+- `annotate_env/Scripts/python.exe study_profile.py <file>` checks a profile
+  before it's copied into a data folder: it prints the settings PEBBL reads
+  from it, or why it can't be used.
 - Profiles hold settings only, never data. They are kept with each study's
   own records, not in this repository.
 

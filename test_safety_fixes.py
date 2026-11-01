@@ -39,6 +39,7 @@ import numpy as np
 
 import check_reprocess_alignment as cra
 import session_summary_gui
+import testdata
 from annotation_io import load_saved_annotations, resolve_ecg_peaks, run_stage_b, save_annotation_json
 from box_sync import find_changed_files, find_unpushed_local_files, push_changed_files_to_box
 from channel_config import CHANNELS
@@ -190,7 +191,7 @@ def test_unreadable_files(tmp):
     assert cra.unreadable_ra_files([path]) and cra.saved_indices([path]) is None
     with patch.object(cra, "find_runs_with_ra_work", return_value={("001", "1"): [path]}), \
          patch.object(cra, "compare_run", return_value={"status": "ALIGNED"}), QUIET(io.StringIO()) as out:
-        code = cra.main(["--old-root", tmp, "--new-root", tmp])
+        code = cra.main(["--old-root", tmp, "--new-root", tmp, "--study-profile", testdata.sdi_profile(tmp)])
     assert code == 1 and "UNREADABLE_RA_FILE" in out.getvalue() and "Do NOT copy" in out.getvalue(), out.getvalue()
     print("   OK: plain messages; a UTF-8 BOM is read; a save over a damaged file is rescued; templates checked; "
           "the reprocess check flags unreadable RA files")

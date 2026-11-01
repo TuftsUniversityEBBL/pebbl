@@ -5,7 +5,9 @@ on a synthetic recording laid out like physiopipe's urglab output: columns
 ecg, ppg, rsp, eda, emg_cor, emg_cor_env, the four *_peaks and event; event
 codes 0 / 50 / 10-15; MachineQC with ecg 'flat', emg_cor 'mains' and ppg
 'rail' stretches; no Provenance.CTTiming. Each setting is checked against
-the built-in settings on the same file (negative control):
+PEBBL's defaults on the same file (negative control): the built-in settings,
+or, for whole sessions (which need a profile since 2026-11-01), a profile
+that sets only the task label (DEFAULTS_PROFILE):
 
   1. Reading the settings; their built-in values; wrong values refused.
   2. runs: only the profile's runs are looked for.
@@ -18,7 +20,7 @@ the built-in settings on the same file (negative control):
   7. ecg_seed_snap_ms: Step 1's seed window (15 ms built in, since 2026-10-31).
   8. ECG flip (--ecg-inverted): on an ECG recorded upside down, a drawn R
      peak lands on the true R only when flipped; the saved review records
-     it; reopening it unflipped stops; the built-in settings refuse it.
+     it; reopening it unflipped stops; the defaults refuse it.
   9. The form follows the data folder's profile; a ticked flip reaches the
      command line.
  10. check_reprocess_alignment.py uses the profile's task label.
@@ -64,6 +66,7 @@ ecg_seed_snap_ms = 0
 50 = "baseline"
 13 = "Urgent tracing"
 """
+DEFAULTS_PROFILE = 'schema_version = 1\nname = "urglab defaults"\ntask = "urglab"\n'
 
 
 def reset():
@@ -212,6 +215,7 @@ def main():
         assert saved(tsv)["channels"]["bad_ppg"]["bad_segments"] == [[4000, 6000]]
         plain = os.path.join(tmp, "plain")
         os.makedirs(plain)
+        write_profile(plain, DEFAULTS_PROFILE)
         plain_tsv, _ = make_recording(plain, "041")
         code, text, _ = run_session(["--box-path", plain, "--subject", "041", "--run", "1", "--channels", "ppg"],
                                     snapshot)
@@ -232,8 +236,8 @@ def main():
         code, text, seen = run_session(["--box-path", plain, "--subject", "041", "--run", "1", "--channels", "ecg",
                                         "--ecg-source", "batch"], snapshot)
         assert code in (0, None), text[-1500:]
-        assert saved(plain_tsv)["channels"]["bad_ecg"]["bad_segments"] == [], "built in: bad_ecg starts blank"
-        assert "event_id" not in seen and "task label is 'urglab'" in text
+        assert saved(plain_tsv)["channels"]["bad_ecg"]["bad_segments"] == [], "by default bad_ecg starts blank"
+        assert "event_id" not in seen and "Study profile: urglab defaults" in text
         print("   OK")
 
         print("7. Step 1's seed window: 15 ms built in, the profile's otherwise...")

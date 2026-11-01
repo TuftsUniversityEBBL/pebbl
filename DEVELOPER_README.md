@@ -191,13 +191,39 @@ fails if any check was skipped.
 
 ## Studies
 
-PEBBL's built-in settings are those of the study it was first built for
-(recordings named `..._task-sdi_physio.tsv.gz`). Another study's settings
-are a study profile, `pebbl_study.toml`, which lab staff put in that study's
-data folder (or name with `--study-profile`); `study_profile.py` reads and
-checks it, and `docs/FORMATS.md` section 10 lists what it can set. Profiles
-are kept with each study's records, not in this repository. With no profile
-file nothing about a session changes.
+Each study's settings are a study profile, `pebbl_study.toml`, in that
+study's data folder, next to `processing_log.csv`. **Reviews of real data
+need one** (HLU, 2026-11-01):
+- a data folder without one stops the session;
+- practice and `--input-run1`/`--input-run2` need `--study-profile <file>`
+  (the form passes it for practice);
+- the form shows the folder's study, or why it can't be used, under the data
+  folder, and won't start on an unusable folder.
+
+`study_profile.py` reads and checks profiles; `docs/FORMATS.md` section 10
+lists every setting. PEBBL's built-in settings, those of the study it was
+first built for (task `sdi`), are the defaults for anything a profile leaves
+out, and the whole settings for synthetic demo data. Saved reviews record
+the profile's name and SHA-256. Profiles are kept with each study's records
+(for our lab, in the private pebbl-private repository's `studies/`), not in
+this repository.
+
+**Setting up a study for PEBBL:**
+1. Write the profile, starting from `docs/FORMATS.md` section 10's example
+   or another study's profile. `name` is what RAs see in the form; `task`
+   must be the task label in the recordings' file names
+   (`sub-XXX_ses-runY_task-<task>_physio.tsv.gz`). Add only the settings the
+   study does differently: its `runs` and `channels`, for example.
+2. Keep the master copy with the study's records (for our lab,
+   `pebbl-private/studies/<study>.toml`).
+3. Check it:
+   `annotate_env/Scripts/python.exe study_profile.py <file>`. It prints every
+   setting PEBBL will use, including the defaults, or says why it can't be
+   used.
+4. Copy it into the study's data folder as `pebbl_study.toml`.
+5. Open the form and choose that folder: it should say "Study: <name>".
+6. If you change the profile later, copy it again. Reviews saved since then
+   record the new SHA-256.
 
 ## Design history
 
@@ -220,13 +246,15 @@ Run it with **zero flags** and a small window pops up asking:
 - **Step 1: Build ECG QRS template**, **Step 2: Review a channel**, or
   **Step 3: Reconcile two reviewers** (Step 2 is preselected, as the more
   common day-to-day action).
-- **Data folder** (with a Browse... button): any folder holding the sub-XXX
-  folders; for our lab, the Box derivatives folder (labeled "Box derivatives
-  path" until 2026-10-05; `--box-path` and its alias `--data-path`). PEBBL
-  finds each run's `sub-XXX_ses-runY_task-<any>_physio.tsv.gz`, preferring
-  our `task-sdi` file whenever it exists (`physio_io.find_run_path`). Also a
-  local working folder (with Browse..., see "Working from Box" below) and
-  the subject.
+- **Data folder** (with a Browse... button): the study's data folder, which
+  holds the sub-XXX folders and the study's `pebbl_study.toml` (see
+  "Studies"; labeled "Box derivatives path" until 2026-10-05; `--box-path`
+  and its alias `--data-path`). A line under it names the folder's study,
+  or says why it can't be used (`simple_gui.folder_status`). PEBBL finds each
+  run's `sub-XXX_ses-runY_task-<any>_physio.tsv.gz`, preferring the
+  profile's task label whenever that file exists (`physio_io.find_run_path`).
+  Also a local working folder (with Browse..., see "Working from Box" below)
+  and the subject.
 - If Step 2 or Step 3: which run, and **which single channel** to
   review/reconcile (defaults to ECG) -- reviewing every available channel
   at once turned out to be too busy in practice, so the form asks for one
@@ -456,7 +484,7 @@ annotate_env\Scripts\python.exe physio_review.py --synthetic --initials hlu --st
 For a real subject, either give both files directly:
 
 ```
-annotate_env\Scripts\python.exe physio_review.py --input-run1 <path1> --input-run2 <path2> --initials hlu --stage 1
+annotate_env\Scripts\python.exe physio_review.py --input-run1 <path1> --input-run2 <path2> --study-profile <data folder>\pebbl_study.toml --initials hlu --stage 1
 ```
 
 ...or let it find both runs itself from a Box derivatives folder + subject
@@ -948,7 +976,7 @@ Either point straight at the file (`--input-run1` works standalone --
 in the same invocation):
 
 ```
-annotate_env\Scripts\python.exe physio_review.py --input-run1 <path_to>\sub-XXX_ses-runY_task-sdi_physio.tsv.gz --initials hlu --stage 2
+annotate_env\Scripts\python.exe physio_review.py --input-run1 <path_to>\sub-XXX_ses-runY_task-sdi_physio.tsv.gz --study-profile <data folder>\pebbl_study.toml --initials hlu --stage 2
 ```
 
 ...or let it build the path from a Box derivatives folder + subject + run
@@ -1520,8 +1548,9 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   arguments at all; owns the local-copy-lifecycle wiring (see "Working
   from Box" above) via `box_sync.py`.
 - `simple_gui.py` — the minimal PyQt6 form shown by `physio_review.py` when
-  it's run with zero arguments: Step 1/2/3 choice, Box path + local
-  working folder (each with a Browse... button), subject, run + a
+  it's run with zero arguments: Step 1/2/3 choice, data folder (with the
+  line naming its study, or why it can't be used) + local working folder
+  (each with a Browse... button), subject, run + a
   single-channel picker (Steps 2/3; locked to ECG and disabled for Step
   1), initials (Steps 1/2) or two reviewers' initials to compare (Step
   3), or a synthetic-demo-data checkbox. Any CLI flag at all skips this
@@ -1583,7 +1612,8 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   channel-locked-to-ECG-for-Step-1 and initials-vs-compare-initials-for-
   Step-3 behaviors)/submit logic directly (no `.exec()` call, so no
   blocking modal event loop) -- verifies the form's decisions, not what
-  it looks like.
+  it looks like. Item 18 covers the data-folder line and the refusal of an
+  unusable folder.
 - `session_summary_gui.py` — the PyQt6 "Session summary" window shown when
   the Step 2/Step 3 viewer closes: change counts, spots to check, comment,
   finished checkbox, and Save / Discard / Go back. `count_changes()` is plain
@@ -1687,13 +1717,16 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
 - `run_tests.py` — runs every suite and summarizes them (see "Running the
   tests").
 - `testdata.py` — where the tests find real test data (`PEBBL_TEST_INPUT`
-  or `test_input/`), and the `SKIPPED:` line a check prints without it.
-- `study_profile.py` — per-study settings: the built-in ones, or a study's
-  `pebbl_study.toml` (see "Studies").
-- `test_study_profile.py` — tests it: the built-in settings change nothing,
-  profiles are read and refused as they should be, a recording of another
-  task stops the session, and saved files record the profile only when one
-  is used.
+  or `test_input/`), the `SKIPPED:` line a check prints without it, and
+  `sdi_profile()`, the minimal study profile for a test's own data folder.
+- `study_profile.py` — per-study settings: a study's `pebbl_study.toml`,
+  required for real data, or the built-in ones for synthetic data (see
+  "Studies"); `python study_profile.py <file>` checks a profile.
+- `test_study_profile.py` — tests it: the built-in settings are the original
+  study's; profiles are read and refused as they should be; a data folder
+  without one, practice or explicit files without `--study-profile`, and a
+  recording of another task each stop the session; saved files record the
+  profile; the check command prints the settings.
 - `test_input_safety.py` — the Phase 3 safety fixes: a missing, damaged or
   mismatched sidecar, a bad sampling rate and runs at different rates stop
   with a plain message; a missing event value is a gap; saved JSON is

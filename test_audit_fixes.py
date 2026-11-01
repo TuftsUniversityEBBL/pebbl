@@ -37,6 +37,7 @@ import physio_review
 import processing_log
 import qrs_template
 import session_summary_gui
+import testdata
 from annotation_io import SessionResult, run_stage_b
 from channel_config import CHANNELS
 from physio_io import build_run_path, generate_synthetic_demo
@@ -165,6 +166,7 @@ def test_c2_interrupted_session_still_pushes():
         box, local = os.path.join(tmp, "box"), os.path.join(tmp, "local")
         os.makedirs(local)
         make_fake_real_subject(box, "071", "1")
+        testdata.sdi_profile(box)  # real data need a study profile (2026-11-01)
         target = "sub-071_ses-run1_task-sdi_annotations_zz.json"
 
         def save_then_interrupt(args, real_box_path, info):

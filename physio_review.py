@@ -163,8 +163,9 @@ def parse_args(argv=None):
                          help="The ECG was recorded upside down: review it flipped, so its R peaks point up (only "
                               "in a study whose profile offers it). Saved files record it.")
     parser.add_argument("--study-profile", type=str, default=None,
-                         help="Lab staff only: the study profile (TOML) to use instead of the data folder's "
-                              f"{study_profile.PROFILE_FILE}, if any (see study_profile.py).")
+                         help=f"The study profile (TOML) to use instead of the data folder's {study_profile.PROFILE_FILE}. "
+                              "Real data need one or the other; practice and --input-run1/--input-run2 need this "
+                              "(the form passes it for practice). See study_profile.py.")
     parser.add_argument("--force-template", action="store_true",
                          help="Build a new QRS template (Stage A) even if one already exists for this subject.")
     parser.add_argument("--template-run", choices=["1", "2"], default="1",
@@ -262,6 +263,8 @@ def parse_args_or_show_gui():
             argv += ["--keep-local"]
         if values.get("practice"):
             argv += ["--practice"]
+        if values.get("study_profile"):
+            argv += ["--study-profile", values["study_profile"]]
 
         if values["stage"] == "2":
             argv += ["--initials", values["initials"], "--run", values["run"], "--channels", values["channel"],
@@ -946,10 +949,17 @@ def _main(session_log):
 
         real_box_path = args.box_path
         # The study's settings (study_profile.py): a profile named with
-        # --study-profile, else the data folder's pebbl_study.toml, else the
-        # built-in ones. Read before the local copy, which holds only the
-        # subject's own folder.
-        profile = study_profile.load(None if args.synthetic else real_box_path, getattr(args, "study_profile", None))
+        # --study-profile, else the data folder's pebbl_study.toml; real data
+        # need one (HLU, 2026-11-01). Synthetic data use the built-in ones.
+        # Read before the local copy, which holds only the subject's own folder.
+        named = getattr(args, "study_profile", None)
+        if args.practice and not named:
+            raise SystemExit("Practice uses your study's settings: start it from the form, or add --study-profile "
+                             f"<your study's data folder>/{study_profile.PROFILE_FILE}.")
+        if args.synthetic and not named:
+            profile = study_profile.BUILT_IN
+        else:
+            profile = study_profile.load(None if args.synthetic else real_box_path, named)
         study_profile.activate(profile)
         if not profile.built_in:
             print(f"Study profile: {profile.name} ({profile.path})")

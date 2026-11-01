@@ -1,17 +1,18 @@
 """
 Study profiles: the review settings that differ from one study to another.
 
-PEBBL's built-in settings are those of the study it was first built for
-(recordings named sub-XXX_ses-runY_task-sdi_physio.tsv.gz), so with no
-profile everything behaves as it always has. Another study's settings live
-in a small TOML file that lab staff put in that study's data folder, next to
-processing_log.csv, named pebbl_study.toml:
+Every study's settings live in a small TOML file that lab staff put in that
+study's data folder, next to processing_log.csv, named pebbl_study.toml. A
+review of real data needs one (HLU, 2026-11-01): a data folder without it is
+the wrong folder, or a study not yet set up for PEBBL, and guessing would
+review it with another study's settings. The file:
 
     schema_version = 1
-    name = "mystudy"   # shown at the start of a session and recorded in saved files
+    name = "mystudy"   # shown in the form and at the start of a session; recorded in saved files
     task = "mystudy"   # the recordings' task label: sub-XXX_ses-runY_task-<task>_physio.tsv.gz
 
-and, each optional, defaulting to the built-in behaviour:
+and, each optional, defaulting to PEBBL's built-in settings (those of the
+study it was first built for, task "sdi"; also what synthetic demo data use):
 
     runs = ["1"]                        # the runs there are (built in: "1" and "2")
     channels = ["ecg", "ppg", "rsp", "eda", "emg_cor"]   # the channels offered (built in: all)
@@ -26,18 +27,21 @@ and, each optional, defaulting to the built-in behaviour:
     50 = "baseline"
 
 Lab staff can also name a profile file directly (physio_review.py
---study-profile). Profiles hold settings only, never data, and they are kept
-outside this repository with each study's own records.
+--study-profile): needed for practice and for recordings given as files
+rather than a data folder. Profiles hold settings only, never data, and they
+are kept outside this repository with each study's own records. To check a
+profile before copying it into a data folder:
 
-When a profile file is used:
+    annotate_env/Scripts/python.exe study_profile.py <file>
+
+For every review of real data:
   - a recording whose task label differs from the profile's stops the
     session, so a study's files are never reviewed with another study's
     settings;
   - the session log's header and every saved review file record the
     profile's name and the SHA-256 of its file ("study_profile"), so each
     review says which settings produced it.
-With the built-in settings nothing is added to saved files, and a recording
-with a task label other than "sdi" gets a printed note.
+Synthetic demo sessions use the built-in settings and record nothing.
 
 An unreadable profile, an unknown setting or a wrong value stops PEBBL with a
 plain message rather than being ignored: a misspelled setting that silently
@@ -169,9 +173,9 @@ def read_profile(path):
 
 def load(data_folder=None, path=None):
     """
-    The settings for a session: the profile file named by `path` if given,
-    else the data folder's pebbl_study.toml if there is one, else the
-    built-in settings.
+    The settings for a session on real data: the profile file named by
+    `path` if given, else the data folder's pebbl_study.toml. Stops when there
+    is neither (see the module docstring). Synthetic sessions use BUILT_IN.
     """
     if path:
         if not os.path.isfile(path):
@@ -181,7 +185,11 @@ def load(data_folder=None, path=None):
         candidate = os.path.join(data_folder, PROFILE_FILE)
         if os.path.isfile(candidate):
             return read_profile(candidate)
-    return BUILT_IN
+        raise SystemExit(f"There's no study settings file ({PROFILE_FILE}) in the data folder {data_folder}. "
+                         f"Check that this is your study's data folder; if it is, the study isn't set up for PEBBL "
+                         f"yet. Please ask the lab staff.")
+    raise SystemExit(f"PEBBL needs the study's settings file ({PROFILE_FILE}): give the study's data folder, or "
+                     f"name the file with --study-profile. Please ask the lab staff.")
 
 
 def activate(profile):
@@ -217,3 +225,24 @@ def check_recording(tsv_path):
     raise SystemExit(f"This recording's task label is '{label}', but the study profile in use "
                      f"({_active.path}) is for task '{_active.task}'. PEBBL won't review one study's files with "
                      f"another study's settings. Please ask the lab staff.")
+
+
+def main(argv=None):
+    """Checks a profile file for lab staff: prints the settings it gives, or why it can't be used."""
+    import sys
+    args = sys.argv[1:] if argv is None else argv
+    if len(args) != 1:
+        raise SystemExit(f"Usage: python study_profile.py <path to a {PROFILE_FILE}>")
+    profile = load(path=args[0])
+    print(f"{profile.path} can be used (SHA-256 {profile.sha256}).")
+    print(f"  name = {profile.name!r}\n  task = {profile.task!r}  (files named ..._task-{profile.task}_physio.tsv.gz)")
+    print(f"  runs = {profile.runs}")
+    print(f"  channels = {'all' if profile.channels is None else profile.channels}")
+    for flag in FLAGS:
+        print(f"  {flag} = {str(getattr(profile, flag)).lower()}")
+    print(f"  ecg_seed_snap_ms = {profile.ecg_seed_snap_ms}")
+    print(f"  event_labels = {profile.event_labels or 'none (numbers only)'}")
+
+
+if __name__ == "__main__":
+    main()
