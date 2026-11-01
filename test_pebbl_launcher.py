@@ -3,15 +3,20 @@
 Tests for pebbl_launcher.py, the "Start PEBBL" update-then-open step (HLU,
 2026-10-04), with git and pip mocked: nothing is pulled or installed.
 
-  1. A folder that isn't its own git checkout (a development copy) is never
-     pulled.
+  1. A folder that isn't its own git checkout is never pulled or checked.
   2. Git missing, a failed pull, a timeout: one plain line, then PEBBL starts
      anyway; a good pull says it's up to date. The pull is `git pull
      --ff-only` in PEBBL's folder.
+  2a. A changed copy (HLU, 2026-10-31): PEBBL's own files changed or deleted
+     and new Python files are listed, other new files ignored, and PEBBL
+     won't start; a check that can't run says so and PEBBL starts.
   3. requirements.txt: reinstalled only when it differs from the copy saved
      at the last successful install; a failed install keeps it pending and
      stops before the form opens.
   4. The form opens with no arguments (physio_review.py).
+  5. The form opens again after each session until it's canceled.
+  6. setup_lab_computer.sh: syntax, --check, its stops and questions, and the
+     check that every user may write to PEBBL's folder.
 
 Run: python test_pebbl_launcher.py
 """
@@ -42,9 +47,9 @@ def main():
         os.makedirs(os.path.join(tmp, "annotate_env"))
         pl = load_copy(tmp)
 
-        print("1. A development copy (no .git of its own) is never pulled...")
+        print("1. A folder without a .git of its own is never pulled or checked...")
         with patch.object(pl.subprocess, "run") as run:
-            assert pl.update_code() is None and not run.called
+            assert pl.update_code() is None and pl.local_changes() == ([], None) and not run.called
         print("   OK")
 
         print("2. Updating: git missing, failed pull, timeout, good pull...")
@@ -65,6 +70,49 @@ def main():
             assert pl.update_code() == "PEBBL is up to date."
         print("   OK")
 
+        print("2a. A changed copy (HLU, 2026-10-31): its own files changed or deleted and new Python files are "
+              "listed, other new files ignored, and PEBBL won't start; a check that can't run says so...")
+        status = (" M physio_review.py\0 D qrs_template.py\0?? json.py\0?? helpers/extra.PY\0?? .DS_Store\0"
+                  "?? notes/screen shot.png\0R  renamed.py\0old_name.py\0A  added.txt\0")
+        with patch.object(pl.shutil, "which", return_value="git"), \
+             patch.object(pl.subprocess, "run", return_value=subprocess.CompletedProcess(["git"], 0, status, "")) as run:
+            changes, note = pl.local_changes()
+        assert note is None and changes == ["physio_review.py (changed)", "qrs_template.py (deleted)", "json.py (new)",
+                                            "helpers/extra.PY (new)", "renamed.py (changed)", "added.txt (new)"], changes
+        assert run.call_args[0][0] == ["git", "--no-optional-locks", "status", "--porcelain", "-z",
+                                       "--untracked-files=all"] and run.call_args[1]["cwd"] == pl.HERE
+        with patch.object(pl.shutil, "which", return_value="git"), patch.object(pl.subprocess, "run", return_value=good):
+            assert pl.local_changes() == ([], None), "a clean copy"
+        with patch.object(pl.shutil, "which", return_value=None):
+            missing = pl.local_changes()
+        assert missing[0] is None and "Git isn't installed" in missing[1] and "starting anyway" in missing[1]
+        refused = subprocess.CompletedProcess(["git"], 128, "", "fatal: detected dubious ownership in repository\n")
+        with patch.object(pl.shutil, "which", return_value="git"), patch.object(pl.subprocess, "run", return_value=refused):
+            failed_check = pl.local_changes()
+        assert failed_check[0] is None and failed_check[1].endswith("dubious ownership in repository")
+        with patch.object(pl.shutil, "which", return_value="git"), \
+             patch.object(pl.subprocess, "run", side_effect=subprocess.TimeoutExpired("git", 60)):
+            assert "TimeoutExpired" in pl.local_changes()[1]
+        with patch.object(pl, "update_code", return_value="PEBBL is up to date."), \
+             patch.object(pl, "local_changes", return_value=(changes, None)), \
+             patch.object(pl, "install_requirements") as install, \
+             patch.object(pl.subprocess, "call") as call, patch("builtins.print") as printed:
+            assert pl.main() == 1
+        assert not install.called and not call.called, "stops before installing anything or opening the form"
+        said = "\n".join(str(c.args[0]) for c in printed.call_args_list)
+        assert said.startswith("PEBBL won't start") and pl.HERE in said and "  qrs_template.py (deleted)" in said
+        assert said.endswith("send it to the lab staff.") and "up to date" not in said and "...and" not in said
+        many = pl.refusal([f"file{i}.py (changed)" for i in range(25)]).splitlines()
+        assert len(many) == 1 + pl.MAX_LISTED + 2 and many[-2] == "  ...and 5 more", many
+        with patch.object(pl, "update_code", return_value=None), \
+             patch.object(pl, "local_changes", return_value=failed_check), \
+             patch.object(pl, "requirements_changed", return_value=False), \
+             patch.object(pl.subprocess, "call", side_effect=[pl.FORM_CANCELED_EXIT]) as call, \
+             patch("builtins.print") as printed:
+            assert pl.main() == 0 and call.called, "a check that can't run doesn't stop PEBBL"
+        assert printed.call_args_list[0].args[0] == failed_check[1]
+        print("   OK: 6 changes listed, .DS_Store and a screenshot ignored; stops before the form; can't-check starts")
+
         print("3. Components: reinstalled only when requirements.txt changed; a failure stops before the form...")
         assert pl.requirements_changed(), "never installed: install"
         shutil.copyfile(pl.REQUIREMENTS, pl.INSTALLED)
@@ -80,7 +128,7 @@ def main():
         with patch.object(pl.subprocess, "call", return_value=1), patch("builtins.print"):
             assert not pl.install_requirements()
         assert pl.requirements_changed(), "a failed install stays pending"
-        with patch.object(pl, "update_code", return_value=None), \
+        with patch.object(pl, "update_code", return_value=None), patch.object(pl, "local_changes", return_value=([], None)), \
              patch.object(pl, "install_requirements", return_value=False), \
              patch.object(pl.subprocess, "call") as call, patch("builtins.print"):
             assert pl.main() == 1 and not call.called
@@ -89,6 +137,7 @@ def main():
         print("4. The form opens with no arguments...")
         shutil.copyfile(pl.REQUIREMENTS, pl.INSTALLED)
         with patch.object(pl, "update_code", return_value="PEBBL is up to date."), \
+             patch.object(pl, "local_changes", return_value=([], None)), \
              patch.object(pl.subprocess, "call", side_effect=[pl.FORM_CANCELED_EXIT]) as call, patch("builtins.print"):
             assert pl.main() == 0
         args = call.call_args[0][0]
@@ -138,6 +187,15 @@ def main():
                            PEBBL_SHORTCUT=os.path.join(tmp, "PEBBL.lnk"))
             assert code == 1 and "Checking only" in out and out.count("PROBLEM") == 8, out
             assert "would run" not in out and "== 1." not in out, "--check changes nothing and skips the setup steps"
+            assert "PROBLEM  Every user may write to it" in out
+            # The write-access check finds the Users group by its SID, as step 4 grants it: icacls prints the
+            # group's name in the Windows language (BUILTIN\Users in English). Granted here on a test folder.
+            shared = os.path.join(tmp, "shared")
+            os.makedirs(shared)
+            subprocess.run(["icacls", shared, "/grant", "*S-1-5-32-545:(OI)(CI)M"], capture_output=True, check=True)
+            code, out = sh("--check", PEBBL_DIR=shared, PEBBL_PYTHON=fake_python,
+                           PEBBL_SHORTCUT=os.path.join(tmp, "PEBBL.lnk"))
+            assert "OK       Every user may write to it" in out and out.count("PROBLEM") == 7, out
             code, out = sh("--dry-run", "--python-installer", os.path.join(tmp, "missing", "python.exe"),
                            PEBBL_DIR=empty, PEBBL_PYTHON=fake_python)
             assert code == 1 and "Can't find the Python installer" in out and "full network path" in out, out
@@ -156,8 +214,8 @@ def main():
             assert "Downloading the Python" in out and "== 2." in out, "goes on to install after the uninstall"
             code, out = sh("--dry-run", PEBBL_DIR=empty, PEBBL_PYTHON=fake_python, PEBBL_TEST_PER_USER="")
             assert "Uninstall it now" not in out and "Downloading the Python" in out, "no own copy: no question"
-            print("   OK: syntax; --check lists 8 problems on a bare folder and runs nothing; clear stops; this "
-                  "account's own 3.11 is explained and only uninstalled on yes")
+            print("   OK: syntax; --check lists 8 problems on a bare folder and runs nothing, and sees the Users "
+                  "group's write access; clear stops; this account's own 3.11 is explained and only uninstalled on yes")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
     print("\nALL PEBBL LAUNCHER TESTS PASSED.")

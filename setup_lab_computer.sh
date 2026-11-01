@@ -135,6 +135,11 @@ $s.WorkingDirectory = $Dir
 if ($Icon -and (Test-Path -LiteralPath $Icon)) { $s.IconLocation = "$Icon,0" }
 $s.Save()
 PS
+cat > "$WORK/account_name.ps1" <<'PS'
+# A group's name in this Windows language, from its SID (S-1-5-32-545 is BUILTIN\Users in English).
+param([string]$Sid)
+(New-Object System.Security.Principal.SecurityIdentifier($Sid)).Translate([System.Security.Principal.NTAccount]).Value
+PS
 run_ps() { powershell -NoProfile -ExecutionPolicy Bypass -File "$(winpath "$WORK/$1")" "${@:2}"; }
 
 # --------------------------------------------------------------------------
@@ -322,7 +327,10 @@ check() {  # check "what" command...
 has_python() { [ -x "$PYTHON_EXE" ]; }
 is_pebbl_clone() { [ "$(git -C "$PEBBL_DIR" remote get-url origin 2> /dev/null | tr -d '\r')" = "$PEBBL_REPO" ]; }
 git_may_update() { git config --system --get-all safe.directory 2> /dev/null | tr -d '\r' | grep -qxF "$(mixpath "$PEBBL_DIR")"; }
-users_may_write() { icacls "$(winpath "$PEBBL_DIR")" 2> /dev/null | grep -qiF 'Users:(OI)(CI)(M)'; }
+users_may_write() {  # icacls names the group in the Windows language, so look its name up from the SID
+  local users; users="$(run_ps account_name.ps1 "${USERS_SID#\*}" | tr -d '\r')"
+  [ -n "$users" ] && icacls "$(winpath "$PEBBL_DIR")" 2> /dev/null | grep -qiF "${users}:(OI)(CI)(M)"
+}
 env_from_all_users_python() {
   [ -f "$ENV/pyvenv.cfg" ] && [ "$(lower "$(sed -n 's/^home *= *//p' "$ENV/pyvenv.cfg" | tr -d '\r')")" = "$(lower "$want_home")" ]
 }
