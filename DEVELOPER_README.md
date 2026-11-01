@@ -54,8 +54,12 @@ for this prototype.
 - start with **Start PEBBL.bat** or **Start PEBBL.command**.
 
 The start scripts run `pebbl_launcher.py`, which:
-- pulls the latest version (`git pull --ff-only`, only in a clone of its own;
-  never in this development folder);
+- pulls the latest version (`git pull --ff-only`, only in a folder that is
+  its own git clone);
+- won't start when PEBBL's own files there have been changed or deleted, or
+  a new Python file has appeared (HLU, 2026-10-31; see "If PEBBL won't start
+  because its files were changed" below). Other new files are ignored. If
+  git can't run the check, it says so in one line and PEBBL starts;
 - reinstalls the requirements when `requirements.txt` changed;
 - opens the form, one session per process, and opens it again after each
   session (HLU, 2026-10-05).
@@ -129,7 +133,24 @@ run again, and it:
 7. checks all of it.
 
 `--dry-run` shows the steps; `--check` only checks, with no admin needed. Tested
-in test_pebbl_launcher item 6.
+in test_pebbl_launcher item 6. Step 7 finds the Users group by its SID, like
+step 4, because icacls prints the group's name in the Windows language.
+
+**If PEBBL won't start because its files were changed** (HLU, 2026-10-31).
+Every user may write to the shared copy (step 4), so the start script checks
+it before each start and lists what changed instead of running edited code.
+Develop in your own clone, and start PEBBL there with `physio_review.py`
+(below), which skips that check. To put a changed copy back, in Git Bash:
+
+```
+cd /c/Users/Public/Downloads/pebbl
+git status                                 # what changed
+git diff HEAD > ~/pebbl_changes.patch      # keep a copy of the edits, if they matter
+git restore --staged --worktree .          # put PEBBL's own files back
+```
+
+Move any new `.py` files that `git status` lists out of the folder, then start
+PEBBL again. On an RA's laptop the folder is `~/pebbl`.
 
 ## Running the tests
 
@@ -1646,9 +1667,10 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   override), a clean skip when no log row resolves, dry-run vs. `--apply`,
   and confirming the original `*_ecg_final.json` is never touched.
 - `test_pebbl_launcher.py` — tests `pebbl_launcher.py` with git and pip
-  mocked (a development copy is never pulled; plain messages when git or the
-  pull fails; requirements reinstalled only when they change; the form
-  opens), and in item 6 `setup_lab_computer.sh`.
+  mocked (a folder without its own .git is never pulled; plain messages when
+  git or the pull fails; a changed copy won't start; requirements reinstalled
+  only when they change; the form opens), and in item 6
+  `setup_lab_computer.sh`.
 - `test_docs.py` — checks `docs/index.html` is up to date with the manual's
   source, and that the files GitHub Pages needs exist.
 - `run_tests.py` — runs every suite and summarizes them (see "Running the
@@ -1671,9 +1693,9 @@ and real-data-gets-its-own-scale) and `test_real_data.py`/`test_column_subsets.p
   without CTTiming, bad_ecg and EMG from MachineQC, event names, Step 1's
   seed window, flipping an upside-down ECG, the form, the alignment check),
   each against the built-in settings on the same file.
-- `pebbl_launcher.py` — what the start scripts run: updates PEBBL, reinstalls
-  the requirements when they change, and opens the form again after each
-  session (see "Setup").
+- `pebbl_launcher.py` — what the start scripts run: updates PEBBL, won't
+  start a changed copy, reinstalls the requirements when they change, and
+  opens the form again after each session (see "Setup").
 - `session_log.py` — writes each RA's session log (see "The session log").
 - `Set up PEBBL.bat`, `setup_pebbl.sh`, `Start PEBBL.bat`,
   `Start PEBBL.command` — one-time setup and the start scripts, for Windows
