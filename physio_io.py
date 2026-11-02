@@ -403,6 +403,23 @@ def machine_qc_flagged_fraction(entry, n_samples):
     return sum(end - start for start, end in entry["segments"]) / n_samples if n_samples else 0.0
 
 
+def machine_spans_not_kept(machine_spans, final_spans, tolerance=1):
+    """
+    How many of the machine's [start, end) spans the RA's final bad
+    stretches no longer cover in full (deleted or shortened), allowing
+    `tolerance` samples at each end for rounding. Widened or merged spans
+    still count as kept.
+    """
+    merged = []
+    for start, end in sorted(final_spans):
+        if merged and start <= merged[-1][1] + tolerance:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return sum(1 for start, end in machine_spans
+               if not any(a <= start + tolerance and b >= end - tolerance for a, b in merged))
+
+
 # No-reading (no_coverage) stretches inside the run shorter than this are
 # slivers between CareTaker readings more than 4 s apart (each reading fills
 # only 2 s each side). The banner tells RAs to keep them (HLU, 2026-10-02).
@@ -416,7 +433,7 @@ def short_no_reading_gaps(entry, n_samples, sfreq):
                if start > 0 and end < n_samples and (end - start) / sfreq < NO_READING_SLIVER_SEC)
 
 
-def machine_qc_notes(qc_channels, channel_keys, n_samples, sfreq, labels, value_ranges=None, units=None):
+def machine_qc_notes(qc_channels, channel_keys, n_samples, sfreq, labels, value_ranges=None, units=None, keep=()):
     """
     Opening-banner lines for pre-filled channels: how much the machine
     flagged, and when its last span stops short of the file end. When it
@@ -427,7 +444,9 @@ def machine_qc_notes(qc_channels, channel_keys, n_samples, sfreq, labels, value_
     (checkpoint-1 review). value_ranges ({key: (min, mean, max)}) and units
     ({key: unit}) let that warning quote the channel's actual range. When the
     sidecar gives the machine's reasons (SegmentsByReason; SBP/DBP from run
-    8), a line says why it flagged them.
+    8), a line says why it flagged them. For the channels in `keep`
+    (channel_config.keeps_machine_stretches), both lines say to leave the
+    machine's stretches: the analysis uses them whatever the RA marks.
     """
     lines = []
     for ch_key in channel_keys:
@@ -441,6 +460,13 @@ def machine_qc_notes(qc_channels, channel_keys, n_samples, sfreq, labels, value_
             lines.append(f"{label}: CareTaker has readings for only {1 - fraction:.1%} of this run; the machine "
                          f"flagged the rest because there is no reading there (it shows blank). Keep those flags "
                          f"and review the recorded part as usual.")
+        elif ch_key in keep:
+            if fraction > MACHINE_QC_FLAGGED_WARNING_FRACTION:
+                lines.append(f"{label}: the machine flagged nearly all of this run ({fraction:.1%}) as bad. Leave "
+                             f"this flag: it counts in the analysis whatever you do.")
+            else:
+                lines.append(f"{label}: starts with {len(entry['segments'])} machine-flagged bad stretch(es) "
+                             f"({fraction:.1%} of the run). Leave them; add any it missed.")
         elif fraction > MACHINE_QC_FLAGGED_WARNING_FRACTION:
             span_text = ""
             if value_ranges and ch_key in value_ranges:

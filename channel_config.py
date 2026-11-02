@@ -268,6 +268,15 @@ def uses_machine_qc(ch_key, cfg):
     return bool(cfg.get("machine_qc")) or (ch_key == "bad_ecg" and study_profile.active().bad_ecg_from_machine_qc)
 
 
+def keeps_machine_stretches(ch_key):
+    """
+    Whether the study's analysis uses this channel's machine-flagged bad
+    stretches whatever the RA marks (study profile keep_machine_stretches;
+    urglab's corrugator EMG, HLU 2026-11-01): RAs leave them and only add.
+    """
+    return ch_key in study_profile.active().keep_machine_stretches
+
+
 def empty_channels(df, keys):
     """
     The keys among `keys` whose column is in the file but holds no values at
