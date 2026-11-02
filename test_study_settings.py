@@ -24,6 +24,10 @@ that sets only the task label (DEFAULTS_PROFILE):
   9. The form follows the data folder's profile; a ticked flip reaches the
      command line.
  10. check_reprocess_alignment.py uses the profile's task label.
+ 11. keep_machine_stretches: COR's machine stretches are to be left (the
+     opening text and the over-90% warning say so), and deleting or
+     shortening one draws a check line before saving; widening doesn't. By
+     default COR's stretches are "check each one", with no such line.
 
 Run with: annotate_env\\Scripts\\python.exe test_study_settings.py
 """
@@ -47,7 +51,7 @@ import qrs_template
 import session_summary_gui
 import study_profile
 from channel_config import select_channels
-from physio_io import build_run_path, generate_synthetic_demo, resolve_subject_run_paths
+from physio_io import build_run_path, generate_synthetic_demo, machine_spans_not_kept, resolve_subject_run_paths
 from provenance import new_pipeline_ppg
 
 QUIET = contextlib.redirect_stdout
@@ -61,6 +65,7 @@ ppg_requires_timing_marker = false
 bad_ecg_from_machine_qc = true
 ecg_inversion_option = true
 ecg_seed_snap_ms = 0
+keep_machine_stretches = ["emg_cor"]
 [event_labels]
 0 = "off task"
 50 = "baseline"
@@ -173,6 +178,7 @@ def main():
         assert (b.runs, b.channels, b.practice, b.ppg_requires_timing_marker, b.bad_ecg_from_machine_qc,
                 b.ecg_inversion_option, b.ecg_seed_snap_ms, b.event_labels) == (["1", "2"], None, True, True, False,
                                                                                 False, 15, {})
+        assert b.keep_machine_stretches == []
         folder = os.path.join(tmp, "study")
         os.makedirs(folder)
         write_profile(folder)
@@ -181,11 +187,20 @@ def main():
                 p.ecg_inversion_option, p.ecg_seed_snap_ms) == (["1"], ["ecg", "ppg", "rsp", "eda", "emg_cor"], False,
                                                                 False, True, True, 0)
         assert p.event_labels == {0: "off task", 50: "baseline", 13: "Urgent tracing"}
+        assert p.keep_machine_stretches == ["emg_cor"]
         head = 'schema_version = 1\nname = "x"\ntask = "x"\n'
         for extra, expected in (('runs = ["a"]\n', "runs must be"), ("runs = []\n", "runs must be"),
                                 ('channels = ["xyz"]\n', "doesn't know: xyz"), ('practice = "yes"\n', "true or false"),
-                                ("ecg_seed_snap_ms = 300\n", "0 to 200"), ('[event_labels]\nx = "y"\n', "event codes")):
+                                ("ecg_seed_snap_ms = 300\n", "0 to 200"), ('[event_labels]\nx = "y"\n', "event codes"),
+                                ('keep_machine_stretches = "emg_cor"\n', "must be a list"),
+                                ('keep_machine_stretches = ["emg_cor", "emg_cor"]\n', "must be a list"),
+                                ('keep_machine_stretches = ["ecg"]\n', "aren't bad-stretch channels: ecg"),
+                                ('channels = ["ecg"]\nkeep_machine_stretches = ["emg_cor"]\n', "doesn't offer: emg_cor")):
             assert expected in refused(head + extra), (extra, refused(head + extra))
+        companion = os.path.join(tmp, "companion")
+        os.makedirs(companion)
+        write_profile(companion, head + 'channels = ["ecg"]\nkeep_machine_stretches = ["bad_ecg"]\n')
+        assert study_profile.load(companion).keep_machine_stretches == ["bad_ecg"], "a companion comes with its parent"
         print("   OK")
 
         tsv, upright = make_recording(folder, "041")
@@ -333,6 +348,62 @@ def main():
         # 30-s synthetic files can't fit the checker's 30-s ECG windows plus the lag search: it says so.
         assert "too short to compare" in lines[0] and " Hz)" not in lines[0], lines
         print(f"   OK: {lines[0]}")
+
+        print("11. keep_machine_stretches: leave COR's machine stretches; deleting one is flagged before saving...")
+        assert machine_spans_not_kept([[100, 200]], [[100, 200]]) == 0
+        assert machine_spans_not_kept([[100, 200]], [[90, 210]]) == 0, "widened"
+        assert machine_spans_not_kept([[100, 200]], [[100, 150], [150, 200]]) == 0, "redrawn in two pieces"
+        assert machine_spans_not_kept([[100, 200]], [[101, 199]]) == 0, "a sample of rounding at each end"
+        assert machine_spans_not_kept([[100, 200]], [[100, 180]]) == 1, "shortened"
+        assert machine_spans_not_kept([[100, 200], [300, 400]], [[300, 400]]) == 1, "deleted"
+
+        def fresh(name, profile_text=PROFILE, whole_run=False):
+            """A new data folder (so COR starts fresh), optionally with COR flagged over the whole run."""
+            new = os.path.join(tmp, name)
+            os.makedirs(new)
+            write_profile(new, profile_text)
+            new_tsv, _ = make_recording(new, "041")
+            if whole_run:
+                sidecar_path = new_tsv.replace("_physio.tsv.gz", "_physio.json")
+                with open(sidecar_path) as f:
+                    meta = json.load(f)
+                n = meta["Provenance"]["NumberOfSamples"]
+                meta["MachineQC"]["Channels"]["emg_cor"] = {"BadSegments": [[0, n]], "Rule": "emg",
+                                                            "SegmentsByReason": {"flat_record": [[0, n]]}}
+                with open(sidecar_path, "w") as f:
+                    json.dump(meta, f)
+            return new
+
+        def cor_spans(raw):
+            return [i for i, a in enumerate(raw.annotations) if a["description"] == "bad_emg_cor"]
+
+        def delete_cor(raw):
+            raw.annotations.delete(cor_spans(raw))
+
+        def widen_cor(raw):  # the machine's [3000, 3500) redrawn as [2900, 3600)
+            raw.annotations.delete(cor_spans(raw))
+            raw.annotations.append(2900 / raw.info["sfreq"], 700 / raw.info["sfreq"], "bad_emg_cor")
+
+        cor = ["--subject", "041", "--run", "1", "--channels", "emg_cor"]
+        removed = "EMG_Corrugator: you removed or shortened 1 of the machine's 1 bad stretch(es)"
+        code, text, _ = run_session(["--box-path", fresh("keep_left")] + cor, snapshot)
+        assert code in (0, None) and "Leave them: they count in the analysis whatever you do" in text, text[-1500:]
+        assert "Leave them; add any it missed" in text and "delete any that are fine" not in text, text[-1500:]
+        assert "you removed or shortened" not in text, text[-1500:]
+        code, text, _ = run_session(["--box-path", fresh("keep_deleted")] + cor, snapshot, plot=delete_cor)
+        assert code in (0, None) and f"CHECK: {removed}" in text, text[-1500:]
+        code, text, _ = run_session(["--box-path", fresh("keep_widened")] + cor, snapshot, plot=widen_cor)
+        assert code in (0, None) and "you removed or shortened" not in text, text[-1500:]
+        code, text, _ = run_session(["--box-path", fresh("keep_whole", whole_run=True)] + cor, snapshot,
+                                    plot=delete_cor)
+        assert code in (0, None) and "Leave this flag: it counts in the analysis whatever you do" in text, text[-1500:]
+        assert "disconnected" not in text and "Save only if you're sure" not in text, text[-1500:]
+        assert f"CHECK: {removed}" in text, text[-1500:]
+        code, text, _ = run_session(["--box-path", fresh("check_deleted", DEFAULTS_PROFILE)] + cor, snapshot,
+                                    plot=delete_cor)
+        assert code in (0, None) and "Check each one: delete any that are fine" in text, text[-1500:]
+        assert "Leave them" not in text and "you removed or shortened" not in text, text[-1500:]
+        print("   OK: left alone, deleted, widened, flagged over the whole run; by default, check each one")
     finally:
         reset()
         shutil.rmtree(tmp, ignore_errors=True)

@@ -316,6 +316,7 @@ Optional settings (the default, PEBBL's built-in value, in brackets):
 | `bad_ecg_from_machine_qc` | `bad_ecg` starts from `MachineQC.Channels.ecg`'s stretches (`false`: starts blank) |
 | `ecg_inversion_option` | the form offers "Flip the ECG (recorded upside down)", `--ecg-inverted` (`false`) |
 | `ecg_seed_snap_ms` | how far Step 1 moves each template-found R peak to the highest point, 0-200 ms; 0 leaves it where the template alignment put it (`15`; 50 until 2026-10-31) |
+| `keep_machine_stretches` | bad-stretch channels whose MachineQC stretches the study's analysis uses whatever the RA marks, e.g. `["emg_cor"]`: the opening text and the over-90% warning say to leave them and only add, and deleting or shortening one draws a check line before saving (none) |
 | `[event_labels]` | names shown beside event codes in the viewer, e.g. `50 = "baseline"` (numbers only) |
 
 **Flipping the ECG.** With `--ecg-inverted`, PEBBL negates the ECG in memory

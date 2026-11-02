@@ -635,6 +635,13 @@ records what the machine flagged (`seed`).
   only missing CareTaker readings (SBP/DBP on a run CareTaker barely
   covers), the banner instead says how much of the run CareTaker covers:
   keep those flags (the stretches are blank) and review the recorded part.
+- **Stretches the study keeps** (study profile `keep_machine_stretches`,
+  e.g. urglab's `emg_cor`, HLU 2026-11-01): the study's analysis uses the
+  machine's stretches on these channels whatever the RA marks, so the
+  banner and the over-90% warning say to leave them and only add. Deleting
+  or shortening one draws a CHECK line in the summary before saving
+  (`physio_io.machine_spans_not_kept`, 1 sample of rounding allowed at each
+  end); widening or redrawing one in pieces doesn't.
 - A flagged stretch that stops within 5 s of the end of the file (the
   machine checks in whole windows) is noted; extend it if the end is bad too.
 - **What the machine checks, per channel** (physioProcess maintainer,

@@ -29,8 +29,8 @@ from provenance import channel_provenance, new_pipeline_ppg, provenance_mismatch
 from channel_config import (COMPANION_CHANNELS, GUIDE_CHANNELS, GUIDE_CONTEXT_TEXT, GUIDE_COUNTER_LOSS_TEXT,
                             GUIDE_EXCEPTION_MAX_LISTED, GUIDE_EXCEPTION_REASONS, GUIDE_OPT_IN, GUIDE_PREMARK_REASONS,
                             GUIDE_PREMARKED_TEXT, GUIDE_TEXTS, PPG_ADD_PEAK_TEXT, REFERENCE_CHANNELS, check_review_alone,
-                            empty_channels, is_present, machine_qc_source, no_data_message, uses_machine_qc,
-                            with_companions)
+                            empty_channels, is_present, keeps_machine_stretches, machine_qc_source, no_data_message,
+                            uses_machine_qc, with_companions)
 from physio_io import (
     apply_unit_labels,
     build_raw,
@@ -40,6 +40,7 @@ from physio_io import (
     MACHINE_QC_FLAGGED_WARNING_FRACTION,
     machine_qc_flagged_fraction,
     machine_qc_notes,
+    machine_spans_not_kept,
     coverage_only,
     machine_qc_segments,
     reason_summary,
@@ -1552,6 +1553,9 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
             qc_note = None  # e.g. an EMG-only session: the machine never checks EMG anyway
     mostly_flagged = [k for k, v in machine_qc.items()
                       if machine_qc_flagged_fraction(v, len(df)) > MACHINE_QC_FLAGGED_WARNING_FRACTION]
+    # Channels whose machine stretches the analysis uses whatever the RA marks
+    # (study profile keep_machine_stretches): leave them, only add.
+    kept_by_study = [k for k, v in machine_qc.items() if v["segments"] and keeps_machine_stretches(k)]
     commit = ((sidecar or {}).get("Provenance") or {}).get("PipelineCommit")
     # The machine's reasons, when the sidecar gives them (SBP/DBP from run 8,
     # decision B1), go into the seed record and the summary's note too.
@@ -1608,14 +1612,21 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
         print(PPG_ADD_PEAK_TEXT)
     prefilled = [full_channel_configs[k]["label"] for k in machine_qc if machine_qc[k]["segments"]]
     blank = [label for label in freshly_seeded_segment if label not in prefilled]
-    if prefilled:
-        print(f" - {'/'.join(prefilled)} start with the machine's bad stretches pre-marked (its automatic "
+    to_check = [full_channel_configs[k]["label"] for k in machine_qc
+                if machine_qc[k]["segments"] and k not in kept_by_study]
+    if to_check:
+        print(f" - {'/'.join(to_check)} start with the machine's bad stretches pre-marked (its automatic "
               f"quality check). Check each one: delete any that are fine, drag to add any it missed.")
+    if kept_by_study:
+        print(f" - {'/'.join(full_channel_configs[k]['label'] for k in kept_by_study)} start with the machine's bad "
+              f"stretches pre-marked (its automatic quality check). Leave them: they count in the analysis whatever "
+              f"you do. Drag to add any it missed.")
+    if prefilled:
         units_by_key = {k: mne.defaults.DEFAULTS["units"].get(cfg["mne_type"], "")
                         for k, cfg in full_channel_configs.items()}
         for line in machine_qc_notes(machine_qc, list(machine_qc), len(df), sfreq, labels_by_key,
                                      value_ranges=compute_channel_value_ranges(df, full_channel_configs),
-                                     units=units_by_key):
+                                     units=units_by_key, keep=kept_by_study):
             print(f"     {line}")
     if blank:
         print(f" - {'/'.join(blank)} start blank. Drag to mark bad/artifact spans.")
@@ -1741,7 +1752,20 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
         # summary for as long as the RA has removed most of that flag, so a
         # dead sensor isn't saved as usable without a second look
         # (checkpoint-1 review).
+        # A channel the study keeps the machine's stretches on: any of them
+        # deleted or shortened still counts in the analysis, so say so.
+        for ch_key in kept_by_study:
+            if ch_key not in outputs:
+                continue
+            spans = machine_qc[ch_key]["segments"]
+            lost = machine_spans_not_kept(spans, outputs[ch_key].get("bad_segments", []))
+            if lost:
+                lines.append(f"{labels_by_key[ch_key]}: you removed or shortened {lost} of the machine's "
+                             f"{len(spans)} bad stretch(es). They count in the analysis whatever you mark here, "
+                             f"so put them back.")
         for ch_key in mostly_flagged:
+            if ch_key in kept_by_study:
+                continue  # the line above covers it
             kept = sum(e - s for s, e in outputs.get(ch_key, {}).get("bad_segments", [])) / max(len(df), 1)
             if kept >= MACHINE_QC_FLAGGED_WARNING_FRACTION:
                 continue

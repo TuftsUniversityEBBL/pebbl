@@ -22,6 +22,9 @@ study it was first built for, task "sdi"; also what synthetic demo data use):
     ecg_inversion_option = true         # offer "flip the ECG" for upside-down recordings (built in: no)
     ecg_seed_snap_ms = 0                # Step 1 moves each template-found R peak to the highest
                                         # point within this many ms (built in: 15; 0 = don't move)
+    keep_machine_stretches = ["emg_cor"]  # channels whose machine-flagged bad stretches RAs leave
+                                        # and only add to: the study's analysis uses them whatever
+                                        # the RA marks (built in: none)
     [event_labels]                      # names shown beside event codes (built in: numbers only)
     0 = "off task"
     50 = "baseline"
@@ -58,7 +61,8 @@ SCHEMA_VERSION = 1
 BUILT_IN_TASK = "sdi"
 TASK_PATTERN = re.compile(r"^[A-Za-z0-9]+$")  # a BIDS label: letters and digits only
 SETTINGS = {"schema_version", "name", "task", "runs", "channels", "practice", "ppg_requires_timing_marker",
-            "bad_ecg_from_machine_qc", "ecg_inversion_option", "event_labels", "ecg_seed_snap_ms"}
+            "bad_ecg_from_machine_qc", "ecg_inversion_option", "event_labels", "ecg_seed_snap_ms",
+            "keep_machine_stretches"}
 BUILT_IN_SEED_SNAP_MS = 15  # Step 1's seed window; 50 ms until 2026-10-31 (qrs_template.seed_snap_samples)
 FLAGS = {"practice": True, "ppg_requires_timing_marker": True, "bad_ecg_from_machine_qc": False,
          "ecg_inversion_option": False}  # each flag's built-in value
@@ -68,13 +72,14 @@ class StudyProfile:
     """One study's settings: the built-in ones (path None) or a profile file's."""
 
     def __init__(self, name, task, path=None, sha256=None, runs=("1", "2"), channels=None, event_labels=None,
-                 ecg_seed_snap_ms=BUILT_IN_SEED_SNAP_MS, **flags):
+                 ecg_seed_snap_ms=BUILT_IN_SEED_SNAP_MS, keep_machine_stretches=(), **flags):
         self.name = name
         self.task = task
         self.path = path
         self.sha256 = sha256
         self.runs = list(runs)
         self.ecg_seed_snap_ms = ecg_seed_snap_ms
+        self.keep_machine_stretches = list(keep_machine_stretches)
         self.channels = None if channels is None else list(channels)  # None: every channel PEBBL knows
         self.event_labels = dict(event_labels or {})  # {code: name}
         for flag, default in FLAGS.items():
@@ -151,6 +156,25 @@ def read_profile(path):
             _refuse(path, f"channels has name(s) PEBBL doesn't know: {', '.join(unknown_channels)} "
                           f"(it knows {', '.join(CHANNELS)})")
         optional["channels"] = channels
+    if "keep_machine_stretches" in settings:
+        from channel_config import CHANNELS, COMPANION_CHANNELS
+        keep = settings["keep_machine_stretches"]
+        if (not isinstance(keep, list) or not all(isinstance(c, str) for c in keep)
+                or len(set(keep)) != len(keep)):
+            _refuse(path, 'keep_machine_stretches must be a list of channel names, e.g. ["emg_cor"]')
+        segment = {k for k, cfg in {**CHANNELS, **COMPANION_CHANNELS}.items()
+                   if cfg.get("annotation_mode") == "segment"}
+        not_segment = [c for c in keep if c not in segment]
+        if not_segment:
+            _refuse(path, f"keep_machine_stretches has name(s) that aren't bad-stretch channels: "
+                          f"{', '.join(not_segment)} (they are {', '.join(sorted(segment))})")
+        if "channels" in optional:
+            # A companion (bad_ecg, bad_ppg) comes with its parent channel.
+            absent = [c for c in keep
+                      if COMPANION_CHANNELS.get(c, {}).get("companion_of", c) not in optional["channels"]]
+            if absent:
+                _refuse(path, f"keep_machine_stretches has channel(s) that channels doesn't offer: {', '.join(absent)}")
+        optional["keep_machine_stretches"] = keep
     for flag in FLAGS:
         if flag in settings:
             if not isinstance(settings[flag], bool):
@@ -241,6 +265,7 @@ def main(argv=None):
     for flag in FLAGS:
         print(f"  {flag} = {str(getattr(profile, flag)).lower()}")
     print(f"  ecg_seed_snap_ms = {profile.ecg_seed_snap_ms}")
+    print(f"  keep_machine_stretches = {profile.keep_machine_stretches or 'none'}")
     print(f"  event_labels = {profile.event_labels or 'none (numbers only)'}")
 
 

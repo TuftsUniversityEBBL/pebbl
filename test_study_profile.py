@@ -217,6 +217,7 @@ def main():
         said = out.getvalue()
         assert "can be used" in said and "name = 'Demo study'" in said and "task = 'demo'" in said, said
         assert "runs = ['1', '2']" in said and "channels = all" in said and "ecg_seed_snap_ms = 15" in said, said
+        assert "keep_machine_stretches = none" in said, said
         for argv, expected in (([os.path.join(bad, study_profile.PROFILE_FILE)], "can't be read"),
                                ([os.path.join(tmp, "missing.toml")], "no such file"), ([], "Usage")):
             try:
