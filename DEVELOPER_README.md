@@ -753,6 +753,37 @@ here for SBP/DBP only -- don't use it to place ECG R peaks (...)", and the
 ECG entry records `guide_shown` true. In Step 1 the template is built from
 the ECG alone, identical with or without the guide.
 
+#### COR's full-range row
+
+**Whenever COR (`emg_cor`) is reviewed and its data vary, in Step 2 and
+Step 3** (HLU, 2026-11-01), a read-only row `emg_cor_full` sits right under
+it (not for the synthetic demo's all-zero placeholder), with
+the guide rows on or off (`channel_config.FULL_RANGE_CHANNELS`).
+- **Why:** `emg_cor`'s scale comes from its own quiet signal (half the width
+  of its middle 95% of values), which shows fine texture but leaves no room
+  for height. With MNE's defaults, everything taller than 3 rows was drawn
+  as a gap and everything between ran over the rows below. In physiopipe's
+  planted recording, an ordinary burst, a held frown and electrode pops all
+  reached the row's edge alike, and the biggest bursts became white holes
+  (the render check, 2026-11-01).
+- **What it is:** the same column at full range. Its display type, `eog`,
+  is used by no other row, so it gets its own scale: the recording's
+  largest absolute value (about its mean), which fills the row. On the
+  planted recording the pops fill it; a 0.3-mV burst reaches about
+  two-fifths of their height and a held frown about a sixteenth. Its unit
+  label is COR's.
+- **Kept in band:** both COR rows (`clamp_display` in their configs) are
+  clipped to their own band in the viewer's copy only
+  (`physio_io.clamp_display_rows`). MNE's own clipping is one setting for
+  the whole plot and would flatten ECG R-peak tops, so it's left alone.
+  Saved reviews come from the data, never the viewer's copy; the value
+  readout (`x`) on `emg_cor` stops at the band's edge.
+- **Never saved:** it isn't a reviewed channel (`annotation_mode` none);
+  a stretch drawn across it is `emg_cor`'s, as on any row. The console
+  explains the row (`channel_config.FULL_RANGE_TEXT`).
+- **Tests:** `test_cor_display.py`, on `fixtures/cor_planted_75-140s.npz`
+  (physiopipe's planted COR; origin in `fixtures/README.md`).
+
 ### Reviewing PPG
 
 PPG peaks are reviewed in a **session of their own** (`--channels ppg`, or

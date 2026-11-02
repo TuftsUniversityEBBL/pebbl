@@ -122,6 +122,7 @@ hold bad stretches.
 | `bad_ecg` | segment | | blank (MachineQC's `ecg` entry with the profile setting `bad_ecg_from_machine_qc`) | companion of `ecg`: stretches where R peaks can't be located; no peaks are kept inside |
 | `bad_ppg` | segment | | MachineQC's `ppg` entry | companion of `ppg`, same rule |
 | `event` | (read-only) | code | | shown under the reviewed signal; never saved |
+| `emg_cor_full` | (read-only) | `emg_cor`'s | | `emg_cor`'s column at full range, right under it whenever COR is reviewed; never saved (`channel_config.FULL_RANGE_CHANNELS`) |
 
 - **Guide rows** (shown, never saved): PPG under SBP and DBP, EDA under RSP,
   RSP under EDA; PPG under ECG only when asked for (`--ecg-ppg-guide`).

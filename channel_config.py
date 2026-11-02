@@ -171,6 +171,7 @@ CHANNELS = {
         "auto_peaks_col": None,
         "segment_label": "bad_emg_cor",
         "label": "EMG_Corrugator",
+        "clamp_display": True,  # kept inside its own row; its full range shows below (FULL_RANGE_CHANNELS)
     },
     "emg_zyg": {
         "mne_type": "emg",
@@ -459,6 +460,30 @@ GUIDE_CHANNELS = {
         "guide_for": ("eda",),
     },
 }
+
+# A read-only copy of a reviewed channel at full range, right under it,
+# whenever that channel is reviewed (HLU, 2026-11-01, after the COR render
+# check). The reviewed row's scale comes from its own quiet signal
+# (physio_io.compute_scalings), which shows fine texture but leaves no room
+# for height: bursts, a held frown and electrode pops all reach the row's
+# edge. Here the recording's largest absolute value fills the row, so heights
+# can be compared. Its own display type gives it its own scale (MNE scales by
+# type; "eog" is used by no other row). Both rows are kept inside their own
+# band (clamp_display; physio_io.clamp_display_rows), so neither spills over
+# the rows below. Keyed by row name (what the viewer shows); "full_range_of"
+# is the data column it plots.
+FULL_RANGE_CHANNELS = {
+    "emg_cor_full": {
+        "mne_type": "eog",
+        "annotation_mode": "none",
+        "label": "EMG_Corrugator (full range)",
+        "full_range_of": "emg_cor",
+        "clamp_display": True,
+    },
+}
+FULL_RANGE_TEXT = ("emg_cor_full: the same corrugator signal at full range, read-only; the recording's largest value "
+                   "fills the row. Compare how tall things are there. emg_cor above it shows the fine detail, with "
+                   "anything taller than its row cut off at the row's edge.")
 
 GUIDE_TEXT = ("PPG (guide): the pulse, for counting beats -- each pulse follows an R peak by a fraction of a second. "
               "Use it to notice a missed or extra beat, never to decide where an R peak goes: the gap varies, and "

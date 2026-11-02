@@ -26,7 +26,8 @@ import session_summary_gui
 import study_profile
 from ppg_checks import ppg_check_lines, same_beat_lines
 from provenance import channel_provenance, new_pipeline_ppg, provenance_mismatch
-from channel_config import (COMPANION_CHANNELS, GUIDE_CHANNELS, GUIDE_CONTEXT_TEXT, GUIDE_COUNTER_LOSS_TEXT,
+from channel_config import (COMPANION_CHANNELS, FULL_RANGE_CHANNELS, FULL_RANGE_TEXT, GUIDE_CHANNELS,
+                            GUIDE_CONTEXT_TEXT, GUIDE_COUNTER_LOSS_TEXT,
                             GUIDE_EXCEPTION_MAX_LISTED, GUIDE_EXCEPTION_REASONS, GUIDE_OPT_IN, GUIDE_PREMARK_REASONS,
                             GUIDE_PREMARKED_TEXT, GUIDE_TEXTS, PPG_ADD_PEAK_TEXT, REFERENCE_CHANNELS, check_review_alone,
                             empty_channels, is_present, keeps_machine_stretches, machine_qc_source, no_data_message,
@@ -34,6 +35,7 @@ from channel_config import (COMPANION_CHANNELS, GUIDE_CHANNELS, GUIDE_CONTEXT_TE
 from physio_io import (
     apply_unit_labels,
     build_raw,
+    clamp_display_rows,
     compute_channel_value_ranges,
     compute_scalings,
     format_channel_value_ranges,
@@ -67,6 +69,11 @@ def combine_with_reference_channels(channel_configs, df, ppg_guide=False, sideca
     decision G2, 2026-09-26: old-pipeline PPG is multi-humped and
     unreliable). sidecar=None means synthetic data (allowed). The PPG under
     ECG is opt-in (GUIDE_OPT_IN; HLU, 2026-10-03): only with ecg_ppg_guide.
+
+    Whatever ppg_guide says, a reviewed channel with a full-range row
+    (FULL_RANGE_CHANNELS: corrugator EMG) gets it right underneath, when the
+    channel has data that varies (not the synthetic demo's all-zero EMG
+    placeholder).
     """
     order = list(channel_configs)
     after = {}
@@ -77,12 +84,21 @@ def combine_with_reference_channels(channel_configs, df, ppg_guide=False, sideca
     combined = {}
     for key, cfg in channel_configs.items():
         combined[key] = cfg
+        for full_key, full_cfg in FULL_RANGE_CHANNELS.items():
+            values = df[key].dropna() if key in df.columns else ()
+            if full_cfg["full_range_of"] == key and len(values) and values.max() > values.min():
+                combined[full_key] = full_cfg
         for guide_key in after.get(key, []):
             combined[guide_key] = GUIDE_CHANNELS[guide_key]
     for key, cfg in REFERENCE_CHANNELS.items():
         if key in df.columns and key not in combined:
             combined[key] = cfg
     return combined
+
+
+def full_range_banner_lines(full_channel_configs):
+    """The opening-banner line for each full-range row on screen (combine_with_reference_channels)."""
+    return [FULL_RANGE_TEXT for key in FULL_RANGE_CHANNELS if key in full_channel_configs]
 
 
 def _inside(i, segments):
@@ -1589,6 +1605,7 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
                            exclude_seeds=exclude_seeds)
 
     scalings = compute_scalings(df, full_channel_configs)
+    clamp_display_rows(raw, full_channel_configs, scalings)
     events_array = compute_event_transitions(df, "event", sfreq)
 
     print("\n" + "=" * 70)
@@ -1642,6 +1659,8 @@ def run_stage_b(df, sfreq, channel_configs, initials, out_dir, file_stem, source
               f"them are left out when you save"
               + (f" ({left} automated peak(s) inside the pre-marked stretches weren't loaded)." if left else "."))
     for line in guide_banner_lines(channel_configs, df, ppg_guide, sidecar, ecg_ppg_guide):
+        print(f" - {line}")
+    for line in full_range_banner_lines(full_channel_configs):
         print(f" - {line}")
     value_range_lines = format_channel_value_ranges(
         compute_channel_value_ranges(df, full_channel_configs), full_channel_configs

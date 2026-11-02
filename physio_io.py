@@ -519,7 +519,7 @@ def sidecar_unit_labels(meta, channel_configs):
     """
     units, warnings = {}, []
     for ch_key, cfg in channel_configs.items():
-        entry = (meta or {}).get(ch_key)
+        entry = (meta or {}).get(cfg.get("full_range_of", ch_key))  # a full-range row has its column's unit
         if not isinstance(entry, dict) or not entry.get("Units"):
             continue
         raw_unit = str(entry["Units"]).strip()
@@ -652,15 +652,19 @@ def compute_scalings(df, channel_configs):
     raw_scales = {}  # mne_type -> scale (may be NaN)
 
     for ch_key, cfg in channel_configs.items():
-        if ch_key not in df.columns:
+        column = cfg.get("full_range_of", ch_key)
+        if column not in df.columns:
             continue
         mne_type = cfg["mne_type"]
         if mne_type in raw_scales:
             continue  # first channel of a shared type sets the scale (MNE scalings are per-type)
 
-        data = df[ch_key].to_numpy(dtype=float)
+        data = df[column].to_numpy(dtype=float)
         if np.all(np.isnan(data)):
             raw_scales[mne_type] = np.nan
+        elif "full_range_of" in cfg:
+            # A full-range row (channel_config.FULL_RANGE_CHANNELS): the largest value fills it.
+            raw_scales[mne_type] = np.nanmax(np.abs(data - np.nanmean(data)))
         else:
             raw_scales[mne_type] = (np.nanpercentile(data, 97.5) - np.nanpercentile(data, 2.5)) / 2
 
@@ -671,6 +675,27 @@ def compute_scalings(df, channel_configs):
         mne_type: (scale if (np.isfinite(scale) and scale > DEGENERATE_SCALE_FLOOR) else borrowed)
         for mne_type, scale in raw_scales.items()
     }
+
+
+def clamp_display_rows(raw, channel_configs, scalings):
+    """
+    Keeps each row whose config sets clamp_display (corrugator EMG and its
+    full-range row) inside its own band: values beyond its scale either side of
+    its mean are cut at the band's edge, in the viewer's copy only. MNE can
+    only do this for every row at once (raw.plot's clipping), which would
+    flatten the tops of ECG R peaks too, so the other rows keep MNE's default
+    (shown up to 3 rows' height, blank beyond). The data saved reviews are
+    made from (df) are untouched; the viewer's value readout on a clamped row
+    stops at the edge.
+    """
+    for ch in raw.ch_names:
+        cfg = channel_configs.get(ch) or {}
+        limit = scalings.get(cfg.get("mne_type"))
+        if not cfg.get("clamp_display") or not limit:
+            continue
+        # Picked by position: a row named like an MNE type (e.g. "ecg") is ambiguous by name.
+        raw.apply_function(lambda x, limit=limit: np.clip(x, np.nanmean(x) - limit, np.nanmean(x) + limit),
+                           picks=[raw.ch_names.index(ch)])
 
 
 def compute_channel_value_ranges(df, channel_configs):
@@ -735,11 +760,12 @@ def build_raw(df, channel_configs, sfreq):
     is actually present as a column in df, tagged with the mne channel type
     declared in channel_configs (channel_config.py).
     """
-    available = [ch for ch in channel_configs if ch in df.columns]
+    available = [ch for ch in channel_configs if channel_configs[ch].get("full_range_of", ch) in df.columns]
     if not available:
         raise ValueError("None of the configured channels were found in the data.")
 
-    data = df[available].to_numpy().T
+    # A full-range row (channel_config.FULL_RANGE_CHANNELS) plots another channel's column.
+    data = df[[channel_configs[ch].get("full_range_of", ch) for ch in available]].to_numpy().T
     ch_types = [channel_configs[ch]["mne_type"] for ch in available]
 
     info = mne.create_info(ch_names=available, sfreq=sfreq, ch_types=ch_types)

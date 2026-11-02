@@ -1,0 +1,22 @@
+# Test fixtures
+
+Small synthetic files the tests read. None holds participant data.
+
+## cor_planted_75-140s.npz
+
+A planted corrugator EMG (COR) recording, used by `test_cor_display.py` to check how PEBBL shows COR.
+
+- **What it is:** 65 s (75-140 s) of a 300-s synthetic recording, 1000 Hz, in mV, stored as float32.
+  It is mostly quiet live muscle, with three planted events: an ordinary 0.3-mV burst (79.75-80.25 s), a held
+  4-s frown (100-104 s) and a cluster of electrode pops (130-130.9 s). The event names and times (in the
+  source recording's seconds) are stored in the file with the signal.
+- **Where it comes from:** physiopipe, the pipeline that writes the corrugator column RAs review. It planted the
+  signals and filtered them once through its corrugator chain (physiopipe commit 1d6dbd8; script
+  `cor_render_data.py`, kept with its companion in physiopipe's `audit/cor_rules_20261101/`). physiopipe has no
+  public repository, so it is cited by name and commit only. The source file, `cor_render_quiet300.csv`, has
+  SHA-256 `6d5ccc8d505b2aaf90a1b515eb40189ce02530a5ccf0c6b9cdca7be6e6534766`, also stored in the fixture.
+- **Approved** for this public repository by HLU on 2026-11-01.
+- **To rebuild it** (e.g. after physiopipe's corrugator filters change), get the new planted CSV from physiopipe,
+  update `SOURCE_SHA256` in `make_cor_planted.py`, and run:
+
+      annotate_env/Scripts/python.exe fixtures/make_cor_planted.py <cor_render_quiet300.csv>
