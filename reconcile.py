@@ -69,11 +69,12 @@ from annotation_io import (
     write_json_atomic,
     companion_provenance,
     drop_peaks_in_bad_stretches,
+    full_range_banner_lines,
     unknown_label_lines,
 )
 from channel_config import COMPANION_CHANNELS, is_present, with_companions
 from channel_config import GUIDE_CHANNELS, REFERENCE_CHANNELS
-from physio_io import build_raw, compute_scalings
+from physio_io import build_raw, clamp_display_rows, compute_scalings
 from session_summary_gui import edit_record
 from ppg_checks import ppg_check_lines, same_beat_lines
 from provenance import channel_provenance
@@ -673,6 +674,7 @@ def run_stage_c(df, sfreq, channel_configs, out_dir, file_stem, source_file,
         sidecar=sidecar, ecg_ppg_guide=ecg_ppg_guide,
     )
     scalings = compute_scalings(df, full_channel_configs)
+    clamp_display_rows(raw, full_channel_configs, scalings)
     reference_channels_shown = [k for k in REFERENCE_CHANNELS if k in full_channel_configs]
     labels = ", ".join(cfg["label"] for cfg in channel_configs.values())
     agreement = agreement_statistics(outputs_a, outputs_b, channel_configs, sfreq, len(df), tolerance_samples)
@@ -690,6 +692,8 @@ def run_stage_c(df, sfreq, channel_configs, out_dir, file_stem, source_file,
     print(f" - Marks unique to only one reviewer are shown separately (auto-colored by")
     print(f"   MNE per label) -- delete any you don't believe; add anything neither caught.")
     for line in guide_banner_lines(channel_configs, df, ppg_guide, sidecar, ecg_ppg_guide):
+        print(f" - {line}")
+    for line in full_range_banner_lines(full_channel_configs):
         print(f" - {line}")
     for comp_key, comp_cfg in COMPANION_CHANNELS.items():
         if comp_key in channel_configs:
