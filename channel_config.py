@@ -372,7 +372,9 @@ COMPANION_CHANNELS = {
     },
     # "bad_ecg" (HLU, 2026-09-27, after trying bad_ppg): the same for ECG, in
     # Steps 2 and 3 (never Step 1). physioProcess has no machine check for
-    # ECG, so it starts blank. Mark bad only where R peaks can't be located:
+    # ECG, so it starts blank, unless the study profile sets
+    # bad_ecg_from_machine_qc: then it starts from MachineQC's ecg stretches
+    # (machine_qc_source). Mark bad only where R peaks can't be located:
     # correct peaks wherever they can be found.
     "bad_ecg": {
         "mne_type": "ecg",
@@ -413,7 +415,10 @@ def is_present(ch_key, cfg, names):
 #     The pulse may be shifted by a beat or two relative to the ECG (a
 #     per-run CareTaker-to-Biopac offset of up to ~2 s; physioProcess
 #     maintainer, 2026-09-25), so RAs use it to notice a missing or extra
-#     beat, never to place a peak.
+#     beat, never to place a peak. Where the PPG shares the ECG's recorder
+#     (one clock), each pulse follows its own R peak, but the gap still
+#     varies beat to beat, so the same rule holds; the RA-facing texts
+#     cover both cases (HLU, 2026-11-01).
 #   - PPG under SBP/DBP, EDA under RSP, RSP under EDA (HLU, 2026-09-27).
 #     SBP/DBP come from CareTaker's finger pulse (same device and clock as
 #     the PPG). EDA and RSP are both Biopac (same clock). EDA helps one way
@@ -446,9 +451,10 @@ GUIDE_CHANNELS = {
     },
 }
 
-GUIDE_TEXT = ("PPG (guide): the pulse, for rhythm only -- it may be shifted by a beat or two from the ECG. Use it to "
-              "notice a missing or extra beat, never to decide where an R peak goes. Device dropouts look like low, "
-              "smooth arcs with no clear pulse.")
+GUIDE_TEXT = ("PPG (guide): the pulse, for counting beats -- each pulse follows an R peak by a fraction of a second. "
+              "Use it to notice a missed or extra beat, never to decide where an R peak goes: the gap varies, and "
+              "where the pulse comes from a separate device it may be shifted by a beat or two. An early beat may "
+              "make a small pulse or none. Dropouts look like a flat line or low, smooth arcs with no clear pulse.")
 
 # What each guide row is for, by (guide, scored channel), shown in the
 # console when the guide is on screen. The SBP/DBP, RSP and EDA lines are
@@ -501,7 +507,9 @@ PPG_ADD_PEAK_TEXT = ("   PPG: to add a peak, drag the box over the whole top of 
 # constant offset from the Biopac's (physioProcess plan item 7a: R peak to
 # placed reading 0.43 s in sub-001 r1 but 1.09 s in sub-085 r1), so placing
 # an R peak "just before the pulse" can land in the wrong beat, most of all
-# in noisy ECG, where the right mark is an ECG bad stretch. The rhythm is
+# in noisy ECG, where the right mark is an ECG bad stretch. (That offset is
+# the original study's two devices; on one clock there's none, but the gap
+# still varies beat to beat: see GUIDE_CHANNELS above.) The rhythm is
 # still sound, so an RA can ask for it (--ecg-ppg-guide, or ticking the
 # form's guide box with ECG selected); the review records it (guide_shown).
 # Under SBP/DBP the PPG stays on by default: same CareTaker clock as the BP.
@@ -510,11 +518,11 @@ PPG_ADD_PEAK_TEXT = ("   PPG: to add a peak, drag the box over the whole top of 
 # scoring ECG with SBP/DBP).
 GUIDE_OPT_IN = {
     ("ppg", "ecg"): {
-        "off": ("PPG (guide): not shown under ECG by default -- the pulse's delay after the R peak differs from run "
-                "to run, so it can mislead R-peak placement. To use it for counting beats only, tick the guide box "
-                "or pass --ecg-ppg-guide."),
+        "off": ("PPG (guide): not shown under ECG by default. Each pulse follows an R peak, so it can help you find "
+                "missed beats, but the gap varies, so place R peaks by the ECG. To show it, tick the guide box or "
+                "pass --ecg-ppg-guide."),
         "shown_for_others": ("PPG (guide): shown here for SBP/DBP only -- don't use it to place ECG R peaks (the "
-                             "pulse's delay after the R peak differs from run to run)."),
+                             "pulse's delay after the R peak varies)."),
     },
 }
 

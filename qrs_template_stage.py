@@ -69,7 +69,7 @@ def parse_args():
     parser.add_argument("--no-ppg-guide", action="store_true",
                          help="Don't show the read-only PPG guide row under the ECG (it's off by default anyway).")
     parser.add_argument("--ecg-ppg-guide", action="store_true",
-                         help="Also show the PPG guide row under the ECG (Steps 1-3; off by default since 2026-10-03, HLU): each run's pulse sits a different delay after its R peaks, so use it for counting beats only, never to place an R peak.")
+                         help="Also show the PPG guide row under the ECG (Steps 1-3; off by default since 2026-10-03, HLU): each pulse follows an R peak, so it helps find missed beats, but the gap varies, so place R peaks by the ECG, never by the pulse.")
     return parser.parse_args()
 
 

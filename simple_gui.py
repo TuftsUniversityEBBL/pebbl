@@ -233,9 +233,10 @@ class ReviewLauncherDialog(QDialog):
         # The read-only guide rows: PPG under SBP/DBP, EDA under RSP, RSP under
         # EDA (on by default; HLU, 2026-09-27), and PPG under ECG in Steps 1-3
         # (OFF by default since 2026-10-03, HLU: its delay after the R peak
-        # differs from run to run). One box: its label and default follow the
-        # ECG/other choice (_sync_guide_default); a manual tick sticks until
-        # that choice changes. Only meaningful for guided channels.
+        # varies, and in the original study differs from run to run). One
+        # box: its label and default follow the ECG/other choice
+        # (_sync_guide_default); a manual tick sticks until that choice
+        # changes. Only meaningful for guided channels.
         self.ppg_guide_checkbox = QCheckBox(GUIDE_BOX_LABELS["other"])
         self.ppg_guide_checkbox.setChecked(True)
         self._guide_context = None

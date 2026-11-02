@@ -67,9 +67,15 @@ Notes:
 - **Unit labels.** `Units` values understood (case-insensitive): `mV`, `V`,
   `microsiemens`, `arbitrary`, `mmHg`, `code`; `boolean` is skipped. They
   relabel the display only; PEBBL never rescales the data.
-- **MachineQC** pre-marks bad stretches for the segment channels that have
-  `machine_qc` set in `channel_config.CHANNELS` (RSP, EDA, SBP, DBP), and
-  PPG's dropouts for its `bad_ppg` companion. A malformed entry makes that one
+- **MachineQC** pre-marks bad stretches for every fresh segment channel
+  that has an entry of its own in `MachineQC.Channels` (`emg_cor` included,
+  when the pipeline checks it), PPG's stretches for its `bad_ppg`
+  companion, and, with the profile setting `bad_ecg_from_machine_qc`, ECG's
+  stretches for `bad_ecg` (`channel_config.machine_qc_source`). The
+  `machine_qc` flag in `channel_config.CHANNELS` (RSP, PPG, EDA, SBP, DBP,
+  `bad_ppg`) only marks the channels the machine is expected to check: a
+  session whose fresh channels include none of them gets no "no machine
+  check" note (`channel_config.uses_machine_qc`). A malformed entry makes that one
   channel start blank, with a note; it is never read as "nothing found".
   Stretches are used exactly as given (never widened or merged).
 - **Never read:** `MachineQC.CoordinateSpace` and
@@ -111,8 +117,8 @@ hold bad stretches.
 | `ppg` | point | arbitrary | `ppg_peaks` | reviewed on its own; new-pipeline files only; interval check |
 | `eda` | segment | µS | MachineQC | |
 | `sbp`, `dbp` | segment | mmHg | MachineQC | |
-| `emg_cor`, `emg_zyg` | segment | | blank | placeholders: no detector |
-| `finger_temperature` | segment | | blank | placeholder: not collected in the original study |
+| `emg_cor`, `emg_zyg` | segment | | MachineQC's own entry, if any (else blank) | no detector in PEBBL |
+| `finger_temperature` | segment | | MachineQC's own entry, if any (else blank) | not collected in the original study |
 | `bad_ecg` | segment | | blank (MachineQC's `ecg` entry with the profile setting `bad_ecg_from_machine_qc`) | companion of `ecg`: stretches where R peaks can't be located; no peaks are kept inside |
 | `bad_ppg` | segment | | MachineQC's `ppg` entry | companion of `ppg`, same rule |
 | `event` | (read-only) | code | | shown under the reviewed signal; never saved |
