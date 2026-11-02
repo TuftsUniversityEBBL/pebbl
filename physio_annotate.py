@@ -76,7 +76,7 @@ def parse_args():
                          help="Don't show the read-only guide rows (PPG under SBP/DBP, EDA under RSP, RSP under "
                               "EDA; also the PPG under ECG).")
     parser.add_argument("--ecg-ppg-guide", action="store_true",
-                         help="Also show the PPG guide row under the ECG (Steps 1-3; off by default since 2026-10-03, HLU): each run's pulse sits a different delay after its R peaks, so use it for counting beats only, never to place an R peak.")
+                         help="Also show the PPG guide row under the ECG (Steps 1-3; off by default since 2026-10-03, HLU): each pulse follows an R peak, so it helps find missed beats, but the gap varies, so place R peaks by the ECG, never by the pulse.")
     parser.add_argument("--allow-old-ppg", action="store_true",
                          help="Lab staff only: allow PPG review on a file processed before the PPG timing fix.")
     parser.add_argument("--template-json", type=str, default=None,

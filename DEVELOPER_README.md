@@ -589,8 +589,10 @@ reviewing yet. It opens MNE's interactive multi-channel browser with:
   values, only flag stretches that look untrustworthy. (RSP was a peak
   channel until 2026-09-25.) On files from the new physioProcess pipeline,
   **RSP, EDA, SBP and DBP start with the machine's own bad stretches
-  already marked** (see "Machine-flagged bad stretches" below); EMG and
-  finger temperature, which the machine doesn't check, start blank.
+  already marked** (see "Machine-flagged bad stretches" below). EMG and
+  finger temperature start from the machine's stretches too when the
+  sidecar has an entry for them (a pipeline that checks EMG), and blank
+  otherwise.
   (SBP/DBP/finger temperature only appear once `physioBatch.py` actually
   produces those columns -- see "Adding SBP/DBP/finger temperature" below.)
 - **Guide rows** (read-only): PPG under SBP/DBP, EDA under RSP, RSP under
@@ -614,8 +616,12 @@ reviewing yet. It opens MNE's interactive multi-channel browser with:
 ### Machine-flagged bad stretches (new-pipeline files)
 
 Files from the new physioProcess pipeline carry the machine's own quality
-check in their sidecar (`MachineQC`). A fresh RSP, EDA, SBP or DBP review
-**starts with those bad stretches already marked**, exactly as the machine
+check in their sidecar (`MachineQC`). A fresh review of any bad-stretch
+channel the sidecar has an entry for (RSP, EDA, SBP and DBP in the original
+study; EMG when a pipeline checks it; `bad_ppg` from PPG's entry; and
+`bad_ecg` from ECG's entry with the profile setting
+`bad_ecg_from_machine_qc`) **starts with those bad stretches already
+marked**, exactly as the machine
 gave them (like ECG and PPG starting from the automated peaks). Check each
 one: delete any that are fine, and drag to add any it missed. The session
 summary counts your changes against the machine's marks, and the saved file
@@ -683,7 +689,7 @@ row).
 
 | Scoring | Guide row | What it's for (the console line) |
 |---|---|---|
-| ECG (Steps 1-3) | PPG, **only with `--ecg-ppg-guide`** (or the ticked box) | the pulse, for counting beats only (below). Without it the console says: "PPG (guide): not shown under ECG by default -- the pulse's delay after the R peak differs from run to run, so it can mislead R-peak placement. To use it for counting beats only, tick the guide box or pass --ecg-ppg-guide." |
+| ECG (Steps 1-3) | PPG, **only with `--ecg-ppg-guide`** (or the ticked box) | the pulse, for counting beats only (below). Without it the console says: "PPG (guide): not shown under ECG by default. Each pulse follows an R peak, so it can help you find missed beats, but the gap varies, so place R peaks by the ECG. To show it, tick the guide box or pass --ecg-ppg-guide." |
 | SBP / DBP | PPG | "the finger pulse the blood pressure comes from. Where there's no usable pulse, the pressure values aren't real." On files whose machine check marks BP inside pulse dropouts (the `ppg_dropout` reason, "no usable finger pulse", from run 9), it adds: "The machine pre-marks those stretches; check the edges." On runs where CareTaker pulse samples were lost in transfer (PPG's `counter_loss` reason, from run 10), a second line gives the exception and where the stretches are: "PPG (guide): in 2 stretch(es) (13.8 s in all, at 100.0-106.9 s, 400.0-406.9 s) CareTaker pulse samples were lost in transfer, so the PPG guide can't be used to check BP there. The BP readings in those stretches were still measured by the device; the loss affected only the pulse copy sent to the app. Keep them, except where the machine marked a finger-pulse dropout." (HLU, 2026-10-03; the times are examples). |
 | RSP | EDA | "a rise 1-3 s after a big breath shows the breath was real. No rise means nothing. Never mark RSP bad because of EDA." |
 | EDA | RSP | "a skin-conductance rise 1-3 s after a big breath is a real response to the breath, not bad signal. Mark EDA bad only where the EDA itself is unusable." |
@@ -723,8 +729,15 @@ entry of a channel that can have a guide records whether it was on screen
   bad stretch, and it would feed pulse timing into HRV and bias PAT.
 - **What it's still good for:** the beat-to-beat rhythm is sound, so an RA
   who asks for it can use it to count beats, i.e. to notice a missing or
-  extra beat, **never to decide where an R peak goes**. Device dropouts look
-  like low, smooth arcs with no clear pulse.
+  extra beat, **never to decide where an R peak goes**. Dropouts look like a
+  flat line or low, smooth arcs with no clear pulse.
+- **On one clock** (a study whose PPG comes from the same recorder as its
+  ECG): there's no run offset, and each pulse follows its own R peak by a
+  fraction of a second. The gap still varies a little from beat to beat, and
+  an early beat may make a small pulse or none, so the rule is the same: the
+  guide finds missed beats; the ECG places each peak. The RA-facing texts
+  (the manual, the console lines above and `--ecg-ppg-guide`'s help) are
+  worded for both cases (HLU, 2026-11-01).
 
 The saved ECG entry records whether the guide was on screen (`guide_shown`).
 On the command line, a session that scores ECG together with SBP/DBP still
@@ -1327,7 +1340,10 @@ sidecar's `MachineQC`). Version 2 (2026-09-26) adds, per channel:
   an earlier review made in an older mode (e.g. RSP breath peaks), kept
   rather than lost.
 - `bad_ecg` (with `ecg`, since 2026-09-27): the ECG's bad stretches, as a
-  segment entry. It starts blank (no machine check for ECG). Mark bad only
+  segment entry. It starts blank (the original study's pipeline has no
+  machine check for ECG), or, with the profile setting
+  `bad_ecg_from_machine_qc`, from `MachineQC.Channels.ecg`'s stretches
+  (`channel_config.machine_qc_source`). Mark bad only
   where R peaks can't be located; correct them wherever you can. `ecg` never
   has peaks inside them; its provenance is the ecg column's
   (`"column": "ecg"`). Not in Step 1.
